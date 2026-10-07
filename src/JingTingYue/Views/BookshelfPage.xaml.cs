@@ -369,7 +369,7 @@ public sealed partial class BookshelfPage : Page
         }
     }
 
-    private void About_Click(object sender, RoutedEventArgs e)
+    private async void About_Click(object sender, RoutedEventArgs e)
     {
         var ink = (Brush)Application.Current.Resources["BookInkBrush"];
         var muted = (Brush)Application.Current.Resources["MutedInkBrush"];
@@ -379,16 +379,15 @@ public sealed partial class BookshelfPage : Page
         var logoChild = new TextBlock { Text = "静", FontFamily = new FontFamily("KaiTi"), FontSize = 28, Foreground = onAccent, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
         var logo = new Border { Width = 56, Height = 56, CornerRadius = new CornerRadius(16), Background = green, Child = logoChild };
 
-        var panel = new StackPanel { Spacing = 14, MinWidth = 320, MaxWidth = 380 };
+        var panel = new StackPanel { Spacing = 14 };
         panel.Children.Add(logo);
         panel.Children.Add(new TextBlock { Text = "静听阅", FontSize = 22, FontWeight = FontWeights.SemiBold, Foreground = ink });
         panel.Children.Add(new TextBlock { Text = "版本 1.0 · 本地 EPUB 阅读与神经听书", FontSize = 13, Foreground = muted });
         panel.Children.Add(new TextBlock { Text = "书、笔记与阅读记录都保存在本机。听书由本机 Kokoro 神经语音合成，不联网；AI 解读使用你自己的 DeepSeek Key。", FontSize = 13, TextWrapping = TextWrapping.Wrap, Foreground = ink });
         panel.Children.Add(new TextBlock { Text = "愿你在此，安静读完一本书。", FontFamily = new FontFamily("KaiTi"), FontSize = 14, Foreground = green });
 
-        var border = new Border { Background = (Brush)Application.Current.Resources["PaperBgBrush"], CornerRadius = new CornerRadius(16), Padding = new Thickness(24), Child = panel };
-        var flyout = new Flyout { Content = border, Placement = Microsoft.UI.Xaml.Controls.Primitives.FlyoutPlacementMode.Top };
-        flyout.ShowAt(AboutText);
+        var dlg = new ContentDialog { XamlRoot = this.XamlRoot, Content = panel, CloseButtonText = "好" };
+        await dlg.ShowAsync();
     }
 
     private void UpdateThemeButtons()
