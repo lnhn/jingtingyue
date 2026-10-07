@@ -1,0 +1,557 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>静听阅 · 阅读引擎</title>
+<style>
+  :root {
+    --page-bg: #ffffff;
+    --ink: #252320;
+    --muted: #75716b;
+    --accent: #b84c35;
+    --terracotta: #a74730;
+    --column-gap: 80px;
+    --page-w: 100px;   /* runtime set */
+    --spread-w: 100px;
+    --side-margin: 0px;
+    --page-h: 100px;
+    --font-size: 26px;
+    --line-height: 1.9;
+    --font-family: "KaiTi","STKaiti","SimSun","Songti SC",serif;
+  }
+  html, body { margin: 0; padding: 0; height: 100%; overflow: hidden; background: var(--page-bg); }
+  * { box-sizing: border-box; }
+
+  .pager {
+    position: absolute;
+    top: 0; left: 0;
+    width: 100vw;
+    height: 100vh;
+    overflow: hidden;
+  }
+  .spread-window {
+    position: absolute;
+    top: 0;
+    left: var(--side-margin);
+    width: var(--spread-w);
+    height: 100%;
+    overflow: hidden;
+  }
+  .pagebody {
+    position: absolute;
+    top: 0;
+    height: var(--page-h);
+    width: var(--spread-w);
+    column-width: var(--page-w);
+    column-gap: var(--column-gap);
+    column-fill: auto;
+    padding: 52px 0 44px 0;
+    color: var(--ink);
+    font-size: var(--font-size);
+    line-height: var(--line-height);
+    font-family: var(--font-family);
+    text-align: justify;
+    word-break: break-word;
+    letter-spacing: 0.03em;
+  }
+  /* 章内文字 */
+  .pagebody h1 {
+    font-size: 1.55em;
+    font-weight: 600;
+    color: var(--accent);
+    margin: 0 0 1.2em 0;
+    text-align: center;
+    letter-spacing: 0.12em;
+    break-after: avoid;
+  }
+  .pagebody h1:first-letter { margin-right: 0.12em; }
+  .pagebody h2 {
+    font-size: 1.2em;
+    font-weight: 600;
+    color: var(--accent);
+    margin: 1.4em 0 0.7em 0;
+    break-after: avoid;
+  }
+  .pagebody p {
+    margin: 0 0 1.2em 0;
+    text-indent: 2em;
+  }
+  .pagebody p.noindent { text-indent: 0; }
+  .pagebody .sentence-hl { background: rgba(184,76,53,0.22); border-radius: 2px; }
+  .pagebody mark.note-hl { background: transparent; color: inherit; border-bottom: 2px solid var(--terracotta); padding-bottom:1px; }
+  .pagebody mark { background: rgba(184,76,53,0.14); color: inherit; border-radius: 2px; }
+
+  /* ===== 强制统一排版：覆盖书籍自带的字体/字号/颜色/边距 ===== */
+  .pagebody, .pagebody * {
+    font-family: var(--font-family) !important;
+    line-height: var(--line-height) !important;
+    letter-spacing: 0.03em !important;
+  }
+  .pagebody :not(mark):not(svg):not(img) { color: var(--ink) !important; }
+  body.night .pagebody :not(mark):not(svg):not(img) { color: #F3EFE9 !important; }
+  body.theme-sepia .pagebody :not(mark):not(svg):not(img) { color: #30271F !important; }
+  .pagebody mark, .pagebody mark * { background: transparent; }
+  .pagebody p, .pagebody div, .pagebody section, .pagebody article, .pagebody blockquote,
+  .pagebody li, .pagebody dd, .pagebody dt {
+    font-size: 1em !important;
+    font-weight: normal !important;
+    margin: 0 0 1.2em 0 !important;
+    padding: 0 !important;
+    border: none !important;
+    background: transparent !important;
+    text-indent: 2em !important;
+    text-align: justify !important;
+    float: none !important;
+    width: auto !important;
+    max-width: 100% !important;
+  }
+  .pagebody h1, .pagebody h2, .pagebody h3, .pagebody h4, .pagebody h5, .pagebody h6 {
+    color: var(--accent) !important;
+    font-weight: 600 !important;
+    text-indent: 0 !important;
+    text-align: center !important;
+    margin: 1.4em 0 0.8em 0 !important;
+    padding: 0 !important;
+    border: none !important;
+    background: transparent !important;
+    break-after: avoid;
+  }
+  .pagebody h1 { font-size: 1.5em !important; }
+  .pagebody h2 { font-size: 1.25em !important; }
+  .pagebody h3, .pagebody h4, .pagebody h5, .pagebody h6 { font-size: 1.1em !important; text-align: left !important; }
+  .pagebody ul, .pagebody ol { margin: 0 0 1.2em 2em !important; padding: 0 !important; }
+  .pagebody li { text-indent: 0 !important; margin-bottom: 0.4em !important; }
+  .pagebody a { color: var(--terracotta) !important; text-decoration: none !important; }
+  .pagebody img, .pagebody svg { max-width: 100% !important; height: auto !important; display: block !important; margin: 0 auto 1.2em !important; }
+  .pagebody table { width: 100% !important; border-collapse: collapse !important; margin-bottom: 1.2em !important; }
+  .pagebody td, .pagebody th { border: 1px solid var(--muted) !important; padding: 4px 8px !important; font-size: 0.95em !important; }
+
+  /* 淡出提示 */
+  .hint {
+    position: absolute;
+    bottom: 18px; left: 50%;
+    transform: translateX(-50%);
+    font-size: 13px; color: var(--muted);
+    font-family: "Microsoft YaHei","PingFang SC",sans-serif;
+    letter-spacing: 0.03em;
+    opacity: 0;
+    transition: opacity 0.4s;
+    pointer-events: none;
+    white-space: nowrap;
+  }
+  .hint.show { opacity: 1; }
+  .hint .kbd { border: 1px solid var(--muted); border-radius: 4px; padding: 1px 7px; margin: 0 3px; }
+
+  /* 夜间模式 */
+  body.night { background: #292A30; }
+  body.night .pagebody { color: #F3EFE9; }
+  body.night .pagebody h1, body.night .pagebody h2 { color: #F0A080; }
+  body.night .hint { color: #BBB7B1; }
+  body.night .pagebody .sentence-hl { background: rgba(240,160,128,0.28); }
+  body.night .pagebody mark { background: rgba(240,160,128,0.22); }
+  body.night .pagebody mark.note-hl { border-bottom-color: #F4B094; }
+
+  /* 三档纸张主题 */
+  body.theme-paper { background: #FFFFFF; }
+  body.theme-paper .pagebody { color: #252320; }
+  body.theme-sepia { background: #FBF2E3; }
+  body.theme-sepia .pagebody { color: #30271F; }
+  body.theme-sepia .pagebody h1, body.theme-sepia .pagebody h2 { color: #A74730; }
+</style>
+</head>
+<body>
+  <div class="pager">
+    <div class="spread-window"><div class="pagebody" id="pagebody"></div></div>
+  </div>
+  <div class="hint" id="hint">← → 翻页 · 触控板横向轻扫翻页</div>
+
+<script>
+(function () {
+  "use strict";
+  var root = document.documentElement;
+  var body = document.body;
+  var pager = document.querySelector(".pager");
+  var spreadWindow = document.querySelector(".spread-window");
+  var pagebody = document.getElementById("pagebody");
+  var hint = document.getElementById("hint");
+  var cfg = {
+    pageW: 0, pageH: 0, colUnit: 0, viewW: 0, viewH: 0, sideMargin: 0,
+    columnsPerView: 1, columnCount: 1, pageCount: 1, current: 0,
+    fontSize: 26, lineHeight: 1.9,
+    fontFamily: "KaiTi,STKaiti,SimSun,serif",
+    night: false
+  };
+  var contentHTML = "";
+
+  function post(msg) {
+    if (window.chrome && window.chrome.webview) {
+      window.chrome.webview.postMessage(JSON.stringify(msg));
+    }
+  }
+
+  function applyCss() {
+    root.style.setProperty("--font-size", cfg.fontSize + "px");
+    root.style.setProperty("--font-family", cfg.fontFamily);
+  }
+
+  function measurePage() {
+    var r = pager.getBoundingClientRect();
+    cfg.viewW = r.width;
+    cfg.viewH = r.height;
+    cfg.columnsPerView = r.width >= 1800 ? 2 : 1;
+    var gap = cfg.columnsPerView === 2 ? 96 : 0;
+    var pageW = cfg.columnsPerView === 2
+      ? Math.min(720, Math.floor((r.width - 2 * 64 - gap) / 2))
+      : Math.min(1050, Math.max(320, r.width - 2 * 64));
+    var spreadW = pageW * cfg.columnsPerView + gap;
+    cfg.sideMargin = Math.max(0, Math.floor((r.width - spreadW) / 2));
+    // 单页时将下一列移出视口；双页时两列组成一个完整跨页。
+    if (cfg.columnsPerView === 1) gap = r.width - pageW;
+    cfg.pageW = pageW;
+    cfg.pageH = r.height;
+    root.style.setProperty("--column-gap", gap + "px");
+    cfg.colUnit = pageW + gap;
+    root.style.setProperty("--page-w", pageW + "px");
+    root.style.setProperty("--spread-w", spreadW + "px");
+    root.style.setProperty("--side-margin", cfg.sideMargin + "px");
+    root.style.setProperty("--page-h", cfg.pageH + "px");
+    pagebody.style.left = "0px";
+  }
+
+  function layout() {
+    measurePage();
+    var width = pagebody.scrollWidth;
+    cfg.columnCount = Math.max(1, Math.round((width + (cfg.colUnit - cfg.pageW)) / cfg.colUnit));
+    cfg.pageCount = Math.max(1, Math.ceil(cfg.columnCount / cfg.columnsPerView));
+    if (cfg.current >= cfg.pageCount) cfg.current = cfg.pageCount - 1;
+    if (cfg.current < 0) cfg.current = 0;
+    applyTransform();
+    post({ type: "pageChanged", current: cfg.current, total: cfg.pageCount });
+  }
+
+  function applyTransform() {
+    spreadWindow.scrollLeft = cfg.current * cfg.columnsPerView * cfg.colUnit;
+  }
+
+  function goToPage(n) {
+    if (n < 0 || n > cfg.pageCount - 1) return;
+    cfg.current = n;
+    applyTransform();
+    post({ type: "pageChanged", current: cfg.current, total: cfg.pageCount });
+  }
+
+  function next() { if (cfg.current < cfg.pageCount - 1) { goToPage(cfg.current + 1); return true; } return false; }
+  function prev() { if (cfg.current > 0) { goToPage(cfg.current - 1); return true; } return false; }
+
+  /* ---- 文字位置探针：把当前页首字符的全文偏移映射给宿主，用于跨尺寸恢复 ---- */
+  function visibleTextIndex() {
+    try {
+      var walker = document.createTreeWalker(pagebody, NodeFilter.SHOW_TEXT, null);
+      var targetX = 0;
+      var total = 0;
+      var n;
+      while ((n = walker.nextNode())) {
+        if (n.nodeValue.trim().length === 0) { total += n.nodeValue.length; continue; }
+        var r = document.createRange();
+        r.selectNodeContents(n);
+        var rect = r.getBoundingClientRect();
+        var x = rect.left;
+        if (x >= -1) {
+          // 该文本节点起点已在页内
+          break;
+        }
+        total += n.nodeValue.length;
+      }
+      return total;
+    } catch (e) { return 0; }
+  }
+
+  function offsetToPage(offset) {
+    // 二分或线性：统计每个文本节点，找到 offset 所在页面起点
+    try {
+      var walker = document.createTreeWalker(pagebody, NodeFilter.SHOW_TEXT, null);
+      var acc = 0; var n;
+      while ((n = walker.nextNode())) {
+        var len = n.nodeValue.length;
+        if (offset < acc + len) {
+          var before = document.createRange();
+          before.setStart(n, 0);
+          before.setEnd(n, offset - acc);
+          before.setStart(n, 0);
+          return 0; // fallback
+        }
+        acc += len;
+      }
+      return 0;
+    } catch (e) { return 0; }
+  }
+
+  /* ---- 命令入口 ---- */
+  window.JTReader = {
+    setContent: function (html, startPage) {
+      contentHTML = html;
+      pagebody.innerHTML = html;
+      cfg.current = 0;
+      requestAnimationFrame(function () {
+        layout();
+        if (startPage && startPage > 0) goToPage(Math.min(startPage, cfg.pageCount - 1));
+      });
+    },
+    layout: layout,
+    next: function () { return next(); },
+    prev: function () { return prev(); },
+    goToPage: function (n) { goToPage(n); },
+    getState: function () { return { current: cfg.current, total: cfg.pageCount }; },
+    setFontSize: function (px) {
+      cfg.fontSize = Math.min(34, Math.max(14, px));
+      applyCss();
+      // 保持文字位置：先记下当前页首偏移，再重排后回到该偏移对应页
+      var idx = visibleTextIndex();
+      requestAnimationFrame(function () {
+        layout();
+        goToPage(clampPageFromOffset(idx));
+      });
+    },
+    setFontFamily: function (f) { cfg.fontFamily = f; applyCss(); var idx = visibleTextIndex(); requestAnimationFrame(function(){ layout(); goToPage(clampPageFromOffset(idx)); }); },
+    setNight: function (on) { body.classList.toggle("night", on); },
+    setTheme: function (t) {
+      body.classList.remove("theme-paper","theme-sepia","night");
+      if (t === "night") body.classList.add("night");
+      else if (t === "sepia") body.classList.add("theme-sepia");
+      else if (t === "paper") body.classList.add("theme-paper");
+    },
+    getVisibleTextIndex: visibleTextIndex,
+    /* 朗读用：把正文按句切分，返回每句纯文字与在正文流中的字符起止 */
+    getSentences: function () {
+      try {
+        var parts = [];
+        var walker = document.createTreeWalker(pagebody, NodeFilter.SHOW_TEXT, null);
+        var n;
+        var refRe = /^(参考文献|参考书目|引用文献|References|Bibliography)\s*$/i;
+        var truncateAt = -1;
+        var acc = 0;
+        while ((n = walker.nextNode())) {
+          parts.push(n.nodeValue);
+          // 命中独立"参考文献"标题则从这里截断朗读
+          if (truncateAt < 0 && n.nodeValue.trim().length > 0 && n.nodeValue.trim().length < 20 && refRe.test(n.nodeValue.trim()))
+            truncateAt = acc;
+          acc += n.nodeValue.length;
+        }
+        var full = parts.join('');
+        if (truncateAt > 0) full = full.slice(0, truncateAt);
+        // 按句末标点切句，保留标点
+        var re = /[^。！？；!?;]+[。！？；!?;]*/g;
+        var out = [];
+        var m;
+        while ((m = re.exec(full)) !== null) {
+          var raw = m[0];
+          // 朗读文本：去掉网址/邮箱/数字引用
+          var spoken = raw
+            .replace(/https?:\/\/\S+/g, '')
+            .replace(/[\w.+-]+@[\w-]+\.[\w.]+/g, '')
+            .replace(/\[[0-9,\s,，\-–—]+\]/g, '')
+            .trim();
+          if (spoken.length < 2) continue;
+          out.push({ text: spoken, start: m.index, end: m.index + raw.length });
+        }
+        return out;
+      } catch (e) { return []; }
+    },
+    /* 高亮指定字符区间 */
+    highlightRange: function (start, end) {
+      // 先清旧高亮
+      pagebody.querySelectorAll('mark.tts-hl').forEach(function (mk) {
+        var parent = mk.parentNode;
+        while (mk.firstChild) parent.insertBefore(mk.firstChild, mk);
+        parent.removeChild(mk);
+      });
+      var n = 0;
+      var walker = document.createTreeWalker(pagebody, NodeFilter.SHOW_TEXT, null);
+      var tn;
+      while ((tn = walker.nextNode())) {
+        var len = tn.nodeValue.length;
+        var nodeStart = n, nodeEnd = n + len;
+        n = nodeEnd;
+        if (nodeEnd <= start) continue;
+        if (nodeStart >= end) break;
+        var s = Math.max(0, start - nodeStart);
+        var e = Math.min(len, end - nodeStart);
+        if (e <= s) continue;
+        try {
+          var r = document.createRange();
+          r.setStart(tn, s); r.setEnd(tn, e);
+          var mk = document.createElement('mark');
+          mk.className = 'tts-hl sentence-hl';
+          r.surroundContents(mk);
+        } catch (e2) {}
+      }
+    },
+    /* 当前可见字符范围（用于自动跟随翻页） */
+    visibleRange: function () {
+      try {
+        var pw = pager.getBoundingClientRect().width;
+        var lm = cfg.sideMargin || 0, rm = pw - (cfg.sideMargin || 0);
+        var walker = document.createTreeWalker(pagebody, NodeFilter.SHOW_TEXT, null);
+        var acc = 0, start = -1, end = -1, n;
+        while ((n = walker.nextNode())) {
+          var len = n.nodeValue.length;
+          var r = document.createRange();
+          r.selectNodeContents(n);
+          var rect = r.getBoundingClientRect();
+          if (rect.width === 0) { acc += len; continue; }
+          if (rect.right > lm - 1 && rect.left < rm && start === -1) start = acc;
+          if (rect.left > lm - 1 && rect.right <= rm + 1) end = acc + len;
+          acc += len;
+        }
+        return { start: start, end: end };
+      } catch (e) { return { start: 0, end: 0 }; }
+    },
+    /* 当前选中文本在正文流中的起止偏移与文字（做笔记用）；无选区返回 null */
+    getSelectionRange: function () {
+      try {
+        var sel = window.getSelection();
+        if (!sel || sel.isCollapsed || sel.rangeCount === 0) return null;
+        var r = sel.getRangeAt(0);
+        var text = r.toString();
+        if (!text || !text.trim()) return null;
+        // 计算起点偏移：从 pagebody 开头数到 r.startContainer/startOffset
+        function offsetOf(node, off) {
+          var walker = document.createTreeWalker(pagebody, NodeFilter.SHOW_TEXT, null);
+          var acc = 0, tn;
+          while ((tn = walker.nextNode())) {
+            if (tn === node) return acc + off;
+            acc += tn.nodeValue.length;
+          }
+          return -1;
+        }
+        var start = offsetOf(r.startContainer, r.startOffset);
+        var end = offsetOf(r.endContainer, r.endOffset);
+        if (start < 0 || end < 0 || end <= start) return null;
+        return { text: text, start: start, end: end };
+      } catch (e) { return null; }
+    },
+    /* 高亮一个笔记区间（划线色） */
+    markNoteRange: function (start, end) {
+      // 不自动清其它笔记，只包一个 <mark class=note-hl>
+      try {
+        var n = 0, walker = document.createTreeWalker(pagebody, NodeFilter.SHOW_TEXT, null), tn;
+        while ((tn = walker.nextNode())) {
+          var len = tn.nodeValue.length, ns = n, ne = n + len; n = ne;
+          if (ne <= start) continue;
+          if (ns >= end) break;
+          var s = Math.max(0, start - ns), e = Math.min(len, end - ns);
+          if (e <= s) continue;
+          try {
+            var r = document.createRange();
+            r.setStart(tn, s); r.setEnd(tn, e);
+            var mk = document.createElement('mark');
+            mk.className = 'note-hl';
+            r.surroundContents(mk);
+          } catch (e2) {}
+        }
+      } catch (e) {}
+    },
+    goToOffset: function (offset, onlyIfOffscreen) {
+      try {
+        var pw = pager.getBoundingClientRect().width;
+        var lm = cfg.sideMargin || 0, rm = pw - lm;
+        var walker = document.createTreeWalker(pagebody, NodeFilter.SHOW_TEXT, null);
+        var acc = 0, tn;
+        while ((tn = walker.nextNode())) {
+          var len = tn.nodeValue.length;
+          if (offset < acc + len || acc + len === 0) {
+            var off = Math.max(0, Math.min(offset - acc, len));
+            var r = document.createRange();
+            r.setStart(tn, off); r.setEnd(tn, Math.min(off + 1, len));
+            var rect = r.getBoundingClientRect();
+            var visible = (rect.left > lm - 1 && rect.left < rm - 2);
+            if (onlyIfOffscreen && visible) return;
+            // 反推该文字在未平移内容里的 x，换算成页
+            var unshiftedX = rect.left - cfg.sideMargin + cfg.current * cfg.columnsPerView * cfg.colUnit;
+            var column = Math.max(0, Math.floor(unshiftedX / cfg.colUnit));
+            var page = Math.max(0, Math.min(cfg.pageCount - 1, Math.floor(column / cfg.columnsPerView)));
+            goToPage(page);
+            return;
+          }
+          acc += len;
+        }
+      } catch (e) {}
+    },
+    showHint: function (txt, ms) { hint.textContent = txt; hint.classList.add("show"); clearTimeout(hint._t); hint._t = setTimeout(function(){ hint.classList.remove("show"); }, ms || 2200); },
+    highlight: function (start, end) {
+      // 在原文中按字符偏移高亮（朗读句高亮用）
+      var idx = start, n = 0;
+      var walker = document.createTreeWalker(pagebody, NodeFilter.SHOW_TEXT, null);
+      var tn;
+      while ((tn = walker.nextNode())) {
+        var len = tn.nodeValue.length;
+        if (idx <= n + len) {
+          var s = idx - n;
+          var e = Math.min(end - n, len);
+          if (s < 0) s = 0;
+          if (e > s) {
+            try {
+              var r = document.createRange();
+              r.setStart(tn, s);
+              r.setEnd(tn, e);
+              var m = document.createElement("mark");
+              m.className = "sentence-hl";
+              r.surroundContents(m);
+            } catch (e2) {}
+          }
+          break;
+        }
+        n += len;
+      }
+    }
+  };
+
+  function clampPageFromOffset(idx) {
+    // 简化：用 scrollWidth 均匀估计不可靠，这里直接取使当前文字进入视口的页
+    // 采用近似：当前页保持不变；由宿主在重排后按比例换算。
+    return cfg.current;
+  }
+
+  /* ---- 事件 ---- */
+  document.addEventListener("keydown", function (e) {
+    if (e.key === "ArrowRight" || e.key === "PageDown") { e.preventDefault(); next(); }
+    else if (e.key === "ArrowLeft" || e.key === "PageUp") { e.preventDefault(); prev(); }
+  });
+
+  pager.addEventListener("click", function (e) {
+    var x = e.clientX;
+    var w = pager.getBoundingClientRect().width;
+    if (x > w * 0.82) { next(); }
+    else if (x < w * 0.18) { prev(); }
+  });
+
+  /* 触控板横向手势：WinUI WebView2 会以 wheel 事件 deltaX 呈现 */
+  var wheelAcc = 0;
+  window.addEventListener("wheel", function (e) {
+    if (Math.abs(e.deltaX) < Math.abs(e.deltaY)) return; // 纵向滚动不拦截
+    e.preventDefault();
+    wheelAcc += e.deltaX;
+    if (Math.abs(wheelAcc) > 40) {
+      if (wheelAcc > 0) next(); else prev();
+      wheelAcc = 0;
+    }
+  }, { passive: false });
+
+  window.addEventListener("resize", function () {
+    var firstColumn = cfg.current * cfg.columnsPerView;
+    layout();
+    goToPage(Math.min(cfg.pageCount - 1, Math.floor(firstColumn / cfg.columnsPerView)));
+  });
+
+  // 右键：有选中文字时通知宿主弹出记笔记
+  pagebody.addEventListener("contextmenu", function (e) {
+    var sel = window.JTReader.getSelectionRange();
+    if (sel) { e.preventDefault(); post({ type: "noteRequest", text: sel.text, start: sel.start, end: sel.end }); }
+  });
+
+  post({ type: "ready" });
+})();
+</script>
+</body>
+</html>

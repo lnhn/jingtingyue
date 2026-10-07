@@ -1,0 +1,30 @@
+<Application
+    x:Class="JingTingYue.App"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <Application.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <XamlControlsResources xmlns="using:Microsoft.UI.Xaml.Controls" />
+            </ResourceDictionary.MergedDictionaries>
+
+            <!-- 静听阅配色：主区暖米白 / 侧栏顶栏暖灰豆绿 / 深森林绿主色 / 陶土点缀 -->
+            <SolidColorBrush x:Key="MainBgBrush" Color="#F8F7F4" />
+            <SolidColorBrush x:Key="ChromeBgBrush" Color="#FFFFFF" />
+            <SolidColorBrush x:Key="SidebarBgBrush" Color="#F2F0EC" />
+            <SolidColorBrush x:Key="PageCardBrush" Color="#FFFFFF" />
+            <SolidColorBrush x:Key="BookInkBrush" Color="#252320" />
+            <SolidColorBrush x:Key="MutedInkBrush" Color="#807D78" />
+            <SolidColorBrush x:Key="ForestGreenBrush" Color="#D85F45" />
+            <SolidColorBrush x:Key="ForestGreenDeepBrush" Color="#B84C35" />
+            <SolidColorBrush x:Key="SelectedSageBrush" Color="#FBE6DF" />
+            <SolidColorBrush x:Key="TerracottaBrush" Color="#B56A4E" />
+            <SolidColorBrush x:Key="NavyCoverBrush" Color="#3A4A63" />
+            <SolidColorBrush x:Key="ButtonGhostBrush" Color="#FFFFFF" />
+            <SolidColorBrush x:Key="HairlineBrush" Color="#E7E3DE" />
+            <SolidColorBrush x:Key="NoteCardBrush" Color="#F5F3EE" />
+            <SolidColorBrush x:Key="OnAccentBrush" Color="#FFFFFF" />
+            <SolidColorBrush x:Key="DangerBrush" Color="#A33E2E" />
+        </ResourceDictionary>
+    </Application.Resources>
+</Application>

@@ -1,0 +1,25 @@
+# 构建产物
+bin/
+obj/
+publish/
+
+# 发布包
+*.zip
+
+# TTS 大文件（不入库）
+tts-server/venv/
+tts-server/python/
+tts-server/*.onnx
+tts-server/*.onnx.data
+tts-server/*.npz
+tts-server/__pycache__/
+tts-server/*.log
+
+# 用户数据
+*.log
+local.settings.json
+
+# IDE
+.vs/
+.vscode/
+.idea/
