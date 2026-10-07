@@ -1,60 +1,46 @@
-# 静听阅 · 中文 EPUB 阅读器
+# 静听阅
 
-安静、漂亮、适合长期使用的 Windows 原生阅读器。参考 Apple Books 的体验，以中文阅读为主，书籍、笔记和阅读记录保存在本机；听书走 Windows 本地语音，AI 解读用你自己的 DeepSeek API Key。
+一款安静、漂亮、适合长期使用的中文 EPUB 阅读器，听书靠本机神经语音，不依赖云端。
 
-## 技术栈（已核实可用）
+## 特性
 
-| 项 | 选择 | 说明 |
-|---|---|---|
-| 语言/运行时 | C# / .NET 8 (LTS, SDK 8.0.425) | 本机原无 SDK，已安装 |
-| UI | WinUI 3 (Windows App SDK 1.6) | 免安装（自包含运行时），Fluent 外观 |
-| EPUB 渲染 | WebView2 | 本机已装运行时 154.0.4258.53，HTML/CSS 还原 EPUB |
-| 本地听书 | Windows 语音（System.Speech / OneCore） | 已确认本机 3 个中文音色：Microsoft Huihui、Kangkang、Yaoyao |
-| AI | DeepSeek API（用户自填 Key） | Key 存 Windows 凭据管理器，不入备份 |
-| 环境 | Windows 11 Pro (build 26300)，Core Ultra 9 275HX，64GB，RTX 5080 | |
+- **书架**：导入 EPUB、粘贴文字成稿、分类管理、阅读进度与「继续阅读」。
+- **阅读**：多栏分页、键盘/触控板翻页、目录跳转、全书搜索、夜间/羊皮纸/纸白三主题。
+- **字体**：楷体、宋体、仿宋、微软雅黑、黑体、等线、魏碑，每本书独立记忆字体/字号/主题/音色/语速/位置。
+- **听书**：本地 Kokoro 神经 TTS，5 个中文音色，逐句高亮、自动翻页、可跨章节连读、定时停止；朗读时自动跳过网址、邮箱和数字引用。
+- **笔记**：选中文字划线备注，悬停查看、回看原文，可导出竖版分享卡片。
+- **隐私**：书、笔记、进度全在本机；AI 解读用你自己的 DeepSeek Key，不存明文。
 
-## 目录结构
+## 技术栈
 
-```
-JingTingYue/
-  JingTingYue.sln
-  src/JingTingYue/
-    JingTingYue.csproj
-    App.xaml / App.xaml.cs          # 应用入口与全局配色
-    MainWindow.xaml(.cs)            # 主窗口：顶栏 + 阅读区 + 翻页
-    Assets/
-      reader/reader.html            # WebView2 阅读引擎（分页/翻页/定位/高亮）
-      samples/chapter1.html         # 示例章节（公版《菜根谭》选段）
-```
+- C# / .NET 8 / WinUI 3，自包含免安装（不依赖目标机的 .NET）。
+- 阅读引擎：内嵌 WebView2，CSS 多栏分页。
+- 本地 TTS：Kokoro-ONNX + onnxruntime（纯 CPU），FastAPI 微服务随 App 拉起。
 
-## 构建与运行
+## 开发
 
 ```powershell
-# 构建
+# 编译
 dotnet build src\JingTingYue\JingTingYue.csproj -c Debug
 
-# 运行（免安装，直接运行 exe）
-& "src\JingTingYue\bin\Debug\net8.0-windows10.0.19041.0\win-x64\JingTingYue.exe"
+# 运行（开发期）
+.\src\JingTingYue\bin\Debug\net8.0-windows10.0.19041.0\win-x64\JingTingYue.exe
 ```
 
-## 开发阶段（按序推进，每阶段可运行可验证）
+## 打包
 
-1. **阅读页原型**（本阶段，已完成）
-   - WebView2 渲染示例章节，CSS 多栏分页引擎
-   - 翻页（左右按钮 / ← → 键 / 触控板横向手势）、页码指示
-   - 字号调节（改字号后按文字位置重排）、夜间模式
-   - 配色：暖白书页、深森林绿主色、陶土点缀、楷体正文
-   - 已实测：启动渲染、翻页、字号+重排、夜间切换
+```powershell
+dotnet publish src\JingTingYue\JingTingYue.csproj -c Release -r win-x64 --self-contained true -o publish
+```
 
-2. EPUB 导入、书架与阅读进度（规划）
-3. 本地听书与播放控制（规划）
-4. 笔记、原文标记与分享卡片（规划）
-5. DeepSeek 解读与历史（规划）
-6. 备份恢复、打包与整体体验检查（规划）
+把 `tts-server/`（含 `python/` 运行时、`model_uint8.onnx`、`voices.npz`）放到 `publish\tts-server\`，即得到绿色免安装目录。
 
-## 分层设计（面向后续阶段）
+## 数据位置
 
-- 界面层：XAML + MainWindow / 后续 Views
-- 阅读数据层：书籍/章节/进度存储（本地），EPUB 解析
-- 语音层：Windows TTS，与界面解耦
-- AI 层：DeepSeek 调用 + 凭据管理（独立，不入备份）
+`%LOCALAPPDATA%\JingTingYue\`：books.json、notes.json、epubs\。
+
+## 已知边界
+
+- 仅支持 EPUB 与纯文本，不支持 PDF。
+- 听书为 CPU 推理，长句有秒级合成延迟。
+- AI 解读需自备 DeepSeek API Key，联网调用，可能产生费用。
