@@ -23,3 +23,5 @@ local.settings.json
 .vs/
 .vscode/
 .idea/
+
+tts-server/*.wav
