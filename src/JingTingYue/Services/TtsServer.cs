@@ -32,8 +32,10 @@ public static class TtsServer
         try
         {
             var dir = Dir;
-            var py = Path.Combine(dir, "python", "python.exe");
             var srv = Path.Combine(dir, "server.py");
+            // 打包后：python\python.exe；开发期：venv\Scripts\python.exe
+            var py = Path.Combine(dir, "python", "python.exe");
+            if (!File.Exists(py)) py = Path.Combine(dir, "venv", "Scripts", "python.exe");
             if (!File.Exists(py) || !File.Exists(srv)) return;
             _proc = new Process
             {
