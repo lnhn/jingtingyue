@@ -224,6 +224,7 @@
                         <ComboBoxItem Content="黑体" Tag="SimHei,Heiti SC,sans-serif"/>
                         <ComboBoxItem Content="等线" Tag="DengXian,Segoe UI,sans-serif"/>
                         <ComboBoxItem Content="魏碑" Tag="STXinwei,FZWeiBei,KaiTi,serif"/>
+                        <ComboBoxItem Content="隶书" Tag="LiSu,STLiti,SimKai,serif"/>
                     </ComboBox>
 
                     <StackPanel Spacing="2">
