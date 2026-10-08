@@ -10,6 +10,9 @@ public partial class App : Application
 
     public App()
     {
+        var bundledWebView = Path.Combine(AppContext.BaseDirectory, "WebView2Fixed");
+        if (File.Exists(Path.Combine(bundledWebView, "msedgewebview2.exe")))
+            Environment.SetEnvironmentVariable("WEBVIEW2_BROWSER_EXECUTABLE_FOLDER", bundledWebView);
         InitializeComponent();
     }
 
