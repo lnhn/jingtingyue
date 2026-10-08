@@ -14,7 +14,7 @@
         </Grid.RowDefinitions>
 
         <!-- ===== 顶栏 ===== -->
-        <Grid Grid.Row="0" Padding="24,0,24,0" Background="{StaticResource ChromeBgBrush}">
+        <Grid Grid.Row="0" Padding="24,0,24,0" Background="{StaticResource ChromeBgBrush}" PointerPressed="OutsidePanel_PointerPressed">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="*" />
@@ -82,12 +82,15 @@
                 <Grid x:Name="ReaderHost" Background="{StaticResource ChromeBgBrush}"/>
             </Border>
 
+            <Border x:Name="PanelDismissLayer" Grid.ColumnSpan="2" Background="Transparent"
+                    Visibility="Collapsed" Tapped="PanelDismissLayer_Tapped"/>
+
             <!-- ===== 朗读大面板（Apple Books 风格） ===== -->
             <Border Grid.ColumnSpan="2" x:Name="TtsPanel" CornerRadius="22" Background="{StaticResource ChromeBgBrush}" Padding="26,24"
                     BorderBrush="{StaticResource HairlineBrush}" BorderThickness="1"
                     HorizontalAlignment="Center" VerticalAlignment="Center"
-                    Width="440" Visibility="Collapsed">
-                <StackPanel Spacing="18">
+                    Width="470" Visibility="Collapsed">
+                <StackPanel Spacing="20">
                     <Grid>
                         <StackPanel Orientation="Horizontal" Spacing="14" VerticalAlignment="Center">
                             <Border Width="52" Height="52" CornerRadius="16" Background="{StaticResource SelectedSageBrush}">
@@ -110,7 +113,7 @@
                     <StackPanel Spacing="6">
                         <TextBlock Text="选择声音" FontFamily="Microsoft YaHei UI" FontSize="12"
                                    Foreground="{StaticResource MutedInkBrush}"/>
-                        <Grid x:Name="VoiceGrid">
+                        <Grid x:Name="VoiceGrid" ColumnSpacing="10" RowSpacing="10">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="*"/>
                                 <ColumnDefinition Width="*"/>
@@ -121,24 +124,30 @@
                     <StackPanel Spacing="6">
                         <TextBlock Text="播放速度" FontFamily="Microsoft YaHei UI" FontSize="12"
                                    Foreground="{StaticResource MutedInkBrush}"/>
-                        <StackPanel x:Name="RateSeg" Orientation="Horizontal" Spacing="6"/>
+                        <Grid x:Name="RateSeg" ColumnSpacing="8">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="*"/><ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                        </Grid>
                     </StackPanel>
 
-                    <StackPanel Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
+                    <Grid VerticalAlignment="Center">
                         <TextBlock Text="定时停止" FontFamily="Microsoft YaHei UI" FontSize="12"
-                                   Foreground="{StaticResource MutedInkBrush}"/>
-                        <ComboBox MinWidth="120">
+                                   Foreground="{StaticResource MutedInkBrush}" VerticalAlignment="Center"/>
+                        <ComboBox MinWidth="148" HorizontalAlignment="Right">
                             <ComboBoxItem Content="不定时" IsSelected="True"/>
                             <ComboBoxItem Content="读完本章"/>
                             <ComboBoxItem Content="15 分钟后"/>
                             <ComboBoxItem Content="30 分钟后"/>
                             <ComboBoxItem Content="60 分钟后"/>
                         </ComboBox>
-                    </StackPanel>
+                    </Grid>
 
-                    <Button x:Name="StartTtsButton" Click="StartTts_Click"
+                    <StackPanel Spacing="10" Margin="0,8,0,0">
+                    <Button x:Name="StartTtsButton" Click="StartTts_Click" HorizontalAlignment="Stretch"
                             Background="{StaticResource ForestGreenBrush}" BorderThickness="0"
-                            Height="48" CornerRadius="24">
+                            Height="48" CornerRadius="14">
                         <Button.Resources>
                             <StaticResource x:Key="ButtonBackgroundPointerOver" ResourceKey="ForestGreenBrush"/>
                             <StaticResource x:Key="ButtonForegroundPointerOver" ResourceKey="OnAccentBrush"/>
@@ -148,10 +157,12 @@
                         <TextBlock x:Name="StartTtsLabel" Text="开始朗读" FontFamily="Microsoft YaHei UI" FontSize="15"
                                    FontWeight="SemiBold" Foreground="{StaticResource OnAccentBrush}"/>
                     </Button>
-                    <Button x:Name="StopTtsButton" Click="Stop_Click" Background="Transparent" BorderThickness="0" Content="停止朗读" IsEnabled="False"
-                            Foreground="{StaticResource MutedInkBrush}" HorizontalAlignment="Center"/>
+                    <Button x:Name="StopTtsButton" Click="Stop_Click" IsEnabled="False" Content="停止朗读"
+                            Background="{StaticResource SidebarBgBrush}" BorderThickness="0" CornerRadius="14"
+                            Height="44" Width="160" HorizontalAlignment="Center" Foreground="{StaticResource BookInkBrush}"/>
                     <TextBlock x:Name="TtsStatus" Text="● 准备就绪" FontFamily="Microsoft YaHei UI" FontSize="11"
-                               Foreground="{StaticResource MutedInkBrush}" HorizontalAlignment="Center"/>
+                               Foreground="{StaticResource MutedInkBrush}" HorizontalAlignment="Center" Margin="0,6,0,0"/>
+                    </StackPanel>
                 </StackPanel>
             </Border>
 
@@ -217,7 +228,9 @@
 
                     <ComboBox x:Name="FontCombo" Header="字体" HorizontalAlignment="Stretch"
                               SelectionChanged="FontCombo_SelectionChanged">
-                        <ComboBoxItem Content="楷体" Tag="KaiTi,STKaiti,serif" IsSelected="True"/>
+                        <ComboBoxItem Content="思源宋体 · 经典阅读" Tag="'Noto Serif SC Local',serif" IsSelected="True"/>
+                        <ComboBoxItem Content="霞鹜文楷 · 温润手写" Tag="'LXGW WenKai Local',serif"/>
+                        <ComboBoxItem Content="楷体" Tag="KaiTi,STKaiti,serif"/>
                         <ComboBoxItem Content="宋体" Tag="SimSun,STSong,serif"/>
                         <ComboBoxItem Content="仿宋" Tag="FangSong,STFangsong,serif"/>
                         <ComboBoxItem Content="微软雅黑" Tag="Microsoft YaHei,PingFang SC,sans-serif"/>
@@ -255,10 +268,111 @@
                             Foreground="{StaticResource ForestGreenBrush}"/>
                 </StackPanel>
             </Border>
+            <Border x:Name="SharePanel" Grid.ColumnSpan="2" Visibility="Collapsed"
+                    HorizontalAlignment="Center" VerticalAlignment="Center" Width="372"
+                    CornerRadius="22" Background="{StaticResource ChromeBgBrush}"
+                    BorderBrush="{StaticResource HairlineBrush}" BorderThickness="1" Padding="16">
+                <StackPanel Spacing="9">
+                    <Grid>
+                        <StackPanel Spacing="3">
+                            <TextBlock Text="分享卡片" FontSize="22" FontWeight="SemiBold" Foreground="{StaticResource BookInkBrush}"/>
+                            <TextBlock Text="将摘录和想法留成一张卡片" FontSize="12" Foreground="{StaticResource MutedInkBrush}"/>
+                        </StackPanel>
+                        <Button Click="CloseShare_Click" HorizontalAlignment="Right" VerticalAlignment="Top"
+                                Width="36" Height="36" Padding="0" CornerRadius="18" BorderThickness="0"
+                                Background="{StaticResource SidebarBgBrush}">
+                            <TextBlock Text="×" FontSize="16" Foreground="{StaticResource BookInkBrush}"/>
+                        </Button>
+                    </Grid>
+                    <Border Background="{StaticResource NoteCardBrush}" CornerRadius="12" Padding="4"
+                            BorderBrush="{StaticResource HairlineBrush}" BorderThickness="1">
+                        <ScrollViewer Width="320" Height="426" VerticalScrollBarVisibility="Auto"
+                                      HorizontalScrollBarVisibility="Disabled" HorizontalAlignment="Center">
+                            <StackPanel x:Name="SharePreviewHost" Width="320"/>
+                        </ScrollViewer>
+                    </Border>
+                    <Grid ColumnSpacing="10">
+                        <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                        <Button Click="CloseShare_Click" Content="关闭" Height="42" HorizontalAlignment="Stretch"
+                                CornerRadius="12" BorderThickness="0" Foreground="{StaticResource BookInkBrush}"
+                                Background="{StaticResource SidebarBgBrush}"/>
+                        <Button x:Name="SaveShareButton" Grid.Column="1" Click="SaveShare_Click" Content="保存 PNG"
+                                Height="42" HorizontalAlignment="Stretch" CornerRadius="12" BorderThickness="0"
+                                Foreground="{StaticResource OnAccentBrush}" Background="{StaticResource ForestGreenBrush}">
+                            <Button.Resources>
+                                <StaticResource x:Key="ButtonBackgroundPointerOver" ResourceKey="ForestGreenBrush"/>
+                                <StaticResource x:Key="ButtonForegroundPointerOver" ResourceKey="OnAccentBrush"/>
+                                <StaticResource x:Key="ButtonBackgroundPressed" ResourceKey="ForestGreenDeepBrush"/>
+                                <StaticResource x:Key="ButtonForegroundPressed" ResourceKey="OnAccentBrush"/>
+                            </Button.Resources>
+                        </Button>
+                    </Grid>
+                </StackPanel>
+            </Border>
+            <!-- 写笔记：与阅读主题共用纸面和文字颜色 -->
+            <Border x:Name="NoteEditorPanel" Grid.ColumnSpan="2" Visibility="Collapsed"
+                    HorizontalAlignment="Center" VerticalAlignment="Center" Width="540"
+                    CornerRadius="24" Background="{StaticResource ChromeBgBrush}"
+                    BorderBrush="{StaticResource HairlineBrush}" BorderThickness="1" Padding="28,26">
+                <StackPanel Spacing="18">
+                    <Grid>
+                        <StackPanel Spacing="4" Margin="0,0,48,0">
+                            <TextBlock Text="阅读摘录" FontSize="12" Foreground="{StaticResource ForestGreenBrush}"/>
+                            <TextBlock Text="写下这一刻的想法" FontSize="23" FontWeight="SemiBold"
+                                       Foreground="{StaticResource BookInkBrush}"/>
+                            <TextBlock x:Name="NoteEditorBookTitle" FontSize="12" TextTrimming="CharacterEllipsis"
+                                       Foreground="{StaticResource MutedInkBrush}"/>
+                        </StackPanel>
+                        <Button Click="CloseNoteEditor_Click" HorizontalAlignment="Right" VerticalAlignment="Top"
+                                Width="38" Height="38" Padding="0" CornerRadius="19" BorderThickness="0"
+                                Background="{StaticResource SidebarBgBrush}">
+                            <TextBlock Text="×" FontSize="18" Foreground="{StaticResource BookInkBrush}"/>
+                        </Button>
+                    </Grid>
+                    <StackPanel Spacing="8">
+                        <TextBlock Text="选中原文" FontSize="12" Foreground="{StaticResource MutedInkBrush}"/>
+                        <Border Background="{StaticResource NoteCardBrush}" CornerRadius="14" Padding="16,13"
+                                BorderBrush="{StaticResource HairlineBrush}" BorderThickness="1">
+                            <ScrollViewer MaxHeight="126" VerticalScrollBarVisibility="Auto">
+                                <TextBlock x:Name="NoteQuoteText" TextWrapping="Wrap" FontSize="15" LineHeight="27"
+                                           Foreground="{StaticResource BookInkBrush}"/>
+                            </ScrollViewer>
+                        </Border>
+                    </StackPanel>
+                    <StackPanel Spacing="8">
+                        <TextBlock Text="我的想法" FontSize="12" Foreground="{StaticResource MutedInkBrush}"/>
+                        <TextBox x:Name="NoteEditorInput" PlaceholderText="写下你的想法…" AcceptsReturn="True"
+                                 Height="132" TextWrapping="Wrap" FontSize="15" Padding="14,12"
+                                 Foreground="{StaticResource BookInkBrush}"
+                                 Background="{StaticResource NoteCardBrush}"
+                                 BorderBrush="{StaticResource HairlineBrush}" CornerRadius="14"/>
+                    </StackPanel>
+                    <Grid Margin="0,4,0,0" ColumnSpacing="10">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+                        <Button Grid.Column="0" Click="CloseNoteEditor_Click" Content="取消" Height="44"
+                                HorizontalAlignment="Stretch" CornerRadius="12" BorderThickness="0"
+                                Foreground="{StaticResource BookInkBrush}" Background="{StaticResource SidebarBgBrush}"/>
+                        <Button x:Name="NoteEditorSaveButton" Grid.Column="1" Click="SaveNoteEditor_Click"
+                                Content="保存笔记" Height="44" HorizontalAlignment="Stretch" CornerRadius="12"
+                                BorderThickness="0" Foreground="{StaticResource OnAccentBrush}"
+                                Background="{StaticResource ForestGreenBrush}">
+                            <Button.Resources>
+                                <StaticResource x:Key="ButtonBackgroundPointerOver" ResourceKey="ForestGreenBrush"/>
+                                <StaticResource x:Key="ButtonForegroundPointerOver" ResourceKey="OnAccentBrush"/>
+                                <StaticResource x:Key="ButtonBackgroundPressed" ResourceKey="ForestGreenDeepBrush"/>
+                                <StaticResource x:Key="ButtonForegroundPressed" ResourceKey="OnAccentBrush"/>
+                            </Button.Resources>
+                        </Button>
+                    </Grid>
+                </StackPanel>
+            </Border>
         </Grid>
 
         <!-- ===== 底部翻页条 ===== -->
-        <Grid Grid.Row="2" Background="{StaticResource ChromeBgBrush}" Padding="20,0">
+        <Grid Grid.Row="2" Background="{StaticResource ChromeBgBrush}" Padding="20,0" PointerPressed="OutsidePanel_PointerPressed">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="*" />
                 <ColumnDefinition Width="Auto" />

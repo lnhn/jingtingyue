@@ -12,6 +12,7 @@ public class StoredBook
     [JsonPropertyName("cover")] public string CoverHex { get; set; } = "#3A4A63";
     /// <summary>epubs 目录下的文件名。</summary>
     [JsonPropertyName("file")] public string EpubFile { get; set; } = "";
+    [JsonPropertyName("coverFile")] public string CoverFile { get; set; } = "";
     [JsonPropertyName("lastChapter")] public int LastChapter { get; set; }
     [JsonPropertyName("lastPage")] public int LastPage { get; set; }
     [JsonPropertyName("progress")] public int Progress { get; set; }

@@ -4,6 +4,7 @@ using Microsoft.UI.Text;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media;
+using Microsoft.UI.Xaml.Media.Imaging;
 using Windows.UI;
 using Windows.Storage.Pickers;
 
@@ -63,7 +64,6 @@ public sealed partial class BookshelfPage : Page
     public BookshelfPage()
     {
         InitializeComponent();
-        AboutText.PointerPressed += (s, e) => About_Click(s, e);
     }
 
     protected override void OnNavigatedTo(Microsoft.UI.Xaml.Navigation.NavigationEventArgs e)
@@ -159,47 +159,68 @@ public sealed partial class BookshelfPage : Page
             Height = 278,
             CornerRadius = new CornerRadius(5, 12, 12, 5),
             Background = coverBrush,
-            Padding = new Thickness(22, 21, 22, 21),
+            Padding = new Thickness(0),
+            Clip = new Microsoft.UI.Xaml.Media.RectangleGeometry { Rect = new Windows.Foundation.Rect(0, 0, 206, 278) },
         };
-        var coverPanel = new Grid();
-        coverPanel.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-        coverPanel.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
-        coverPanel.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-        var edition = new TextBlock
+
+        // 有封面图就显示图片，否则显示纯色+文字
+        var coverPath = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+            "JingTingYue", "epubs", b.CoverFile);
+        if (!string.IsNullOrEmpty(b.CoverFile) && File.Exists(coverPath))
         {
-            Text = string.IsNullOrWhiteSpace(b.Category) ? "静 听 阅  ·  藏 书" : b.Category,
-            Foreground = new SolidColorBrush(Microsoft.UI.Colors.White),
-            FontFamily = new FontFamily("Microsoft YaHei UI"),
-            FontSize = 10,
-            CharacterSpacing = 60,
-        };
-        coverPanel.Children.Add(edition);
-        var coverTitle = new TextBlock
+            var img = new Image
+            {
+                Source = new BitmapImage(new Uri(coverPath)),
+                Stretch = Stretch.UniformToFill,
+                Width = 206,
+                Height = 278,
+            };
+            cover.Child = img;
+        }
+        else
         {
-            TextWrapping = TextWrapping.Wrap,
-            Text = b.Title,
-            Foreground = new SolidColorBrush(Microsoft.UI.Colors.White),
-            FontFamily = new FontFamily("Microsoft YaHei UI"),
-            FontSize = 21,
-            FontWeight = FontWeights.SemiBold,
-            LineHeight = 32,
-            VerticalAlignment = VerticalAlignment.Center,
-            TextTrimming = TextTrimming.CharacterEllipsis,
-            MaxHeight = 166,
-        };
-        Grid.SetRow(coverTitle, 1);
-        coverPanel.Children.Add(coverTitle);
-        var coverAuthor = new TextBlock
-        {
-            Text = b.Author,
-            Foreground = new SolidColorBrush(Microsoft.UI.Colors.White),
-            FontFamily = new FontFamily("Microsoft YaHei UI"),
-            FontSize = 12,
-            TextTrimming = TextTrimming.CharacterEllipsis,
-        };
-        Grid.SetRow(coverAuthor, 2);
-        coverPanel.Children.Add(coverAuthor);
-        cover.Child = coverPanel;
+            cover.Padding = new Thickness(22, 21, 22, 21);
+            var coverPanel = new Grid();
+            coverPanel.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+            coverPanel.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
+            coverPanel.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+            var edition = new TextBlock
+            {
+                Text = string.IsNullOrWhiteSpace(b.Category) ? "静 听 阅  ·  藏 书" : b.Category,
+                Foreground = new SolidColorBrush(Microsoft.UI.Colors.White),
+                FontFamily = new FontFamily("Microsoft YaHei UI"),
+                FontSize = 10,
+                CharacterSpacing = 60,
+            };
+            coverPanel.Children.Add(edition);
+            var coverTitle = new TextBlock
+            {
+                TextWrapping = TextWrapping.Wrap,
+                Text = b.Title,
+                Foreground = new SolidColorBrush(Microsoft.UI.Colors.White),
+                FontFamily = new FontFamily("Microsoft YaHei UI"),
+                FontSize = 21,
+                FontWeight = FontWeights.SemiBold,
+                LineHeight = 32,
+                VerticalAlignment = VerticalAlignment.Center,
+                TextTrimming = TextTrimming.CharacterEllipsis,
+                MaxHeight = 166,
+            };
+            Grid.SetRow(coverTitle, 1);
+            coverPanel.Children.Add(coverTitle);
+            var coverAuthor = new TextBlock
+            {
+                Text = b.Author,
+                Foreground = new SolidColorBrush(Microsoft.UI.Colors.White),
+                FontFamily = new FontFamily("Microsoft YaHei UI"),
+                FontSize = 12,
+                TextTrimming = TextTrimming.CharacterEllipsis,
+            };
+            Grid.SetRow(coverAuthor, 2);
+            coverPanel.Children.Add(coverAuthor);
+            cover.Child = coverPanel;
+        }
 
         var coverBtn = new Button
         {
@@ -369,26 +390,7 @@ public sealed partial class BookshelfPage : Page
         }
     }
 
-    private async void About_Click(object sender, RoutedEventArgs e)
-    {
-        var ink = (Brush)Application.Current.Resources["BookInkBrush"];
-        var muted = (Brush)Application.Current.Resources["MutedInkBrush"];
-        var green = (Brush)Application.Current.Resources["ForestGreenBrush"];
-        var onAccent = (Brush)Application.Current.Resources["OnAccentBrush"];
-
-        var logoChild = new TextBlock { Text = "静", FontFamily = new FontFamily("KaiTi"), FontSize = 28, Foreground = onAccent, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
-        var logo = new Border { Width = 56, Height = 56, CornerRadius = new CornerRadius(16), Background = green, Child = logoChild };
-
-        var panel = new StackPanel { Spacing = 14 };
-        panel.Children.Add(logo);
-        panel.Children.Add(new TextBlock { Text = "静听阅", FontSize = 22, FontWeight = FontWeights.SemiBold, Foreground = ink });
-        panel.Children.Add(new TextBlock { Text = "版本 1.0 · 本地 EPUB 阅读与神经听书", FontSize = 13, Foreground = muted });
-        panel.Children.Add(new TextBlock { Text = "书、笔记与阅读记录都保存在本机。听书由本机 Kokoro 神经语音合成，不联网；AI 解读使用你自己的 DeepSeek Key。", FontSize = 13, TextWrapping = TextWrapping.Wrap, Foreground = ink });
-        panel.Children.Add(new TextBlock { Text = "愿你在此，安静读完一本书。", FontFamily = new FontFamily("KaiTi"), FontSize = 14, Foreground = green });
-
-        var dlg = new ContentDialog { XamlRoot = this.XamlRoot, Content = panel, CloseButtonText = "好" };
-        await dlg.ShowAsync();
-    }
+    private void About_Click(object sender, RoutedEventArgs e) => Frame.Navigate(typeof(AboutPage));
 
     private void UpdateThemeButtons()
     {

@@ -5,6 +5,18 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>静听阅 · 阅读引擎</title>
 <style>
+  @font-face {
+    font-family: 'Noto Serif SC Local';
+    src: url('https://jingtingyue.local/Fonts/NotoSerifSC/NotoSerifSC-VF.ttf') format('truetype');
+    font-weight: 200 900;
+    font-display: swap;
+  }
+  @font-face {
+    font-family: 'LXGW WenKai Local';
+    src: url('https://jingtingyue.local/Fonts/LXGWWenKai/LXGWWenKai-Regular.ttf') format('truetype');
+    font-weight: 400;
+    font-display: swap;
+  }
   :root {
     --page-bg: #ffffff;
     --ink: #252320;
@@ -18,7 +30,7 @@
     --page-h: 100px;
     --font-size: 26px;
     --line-height: 1.9;
-    --font-family: "KaiTi","STKaiti","SimSun","Songti SC",serif;
+    --font-family: Georgia, "Times New Roman", 'Noto Serif SC Local',serif;
   }
   html, body { margin: 0; padding: 0; height: 100%; overflow: hidden; background: var(--page-bg); }
   * { box-sizing: border-box; }
@@ -80,6 +92,11 @@
   .pagebody p.noindent { text-indent: 0; }
   .pagebody .sentence-hl { background: rgba(184,76,53,0.22); border-radius: 2px; }
   .pagebody mark.note-hl { background: transparent; color: inherit; border-bottom: 2px solid var(--terracotta); padding-bottom:1px; }
+  .pagebody mark.note-hl { cursor: help; }
+  #note-tooltip { display:none; position:fixed; z-index:100; max-width:320px; padding:12px 15px;
+    border-radius:12px; background:var(--page-bg); color:var(--ink); border:1px solid var(--terracotta);
+    box-shadow:0 8px 26px rgba(0,0,0,.16); font:14px/1.6 'Microsoft YaHei UI',sans-serif;
+    white-space:pre-wrap; overflow-wrap:anywhere; pointer-events:none; }
   .pagebody mark { background: rgba(184,76,53,0.14); color: inherit; border-radius: 2px; }
 
   /* ===== 强制统一排版：覆盖书籍自带的字体/字号/颜色/边距 ===== */
@@ -151,6 +168,7 @@
   body.night .pagebody .sentence-hl { background: rgba(240,160,128,0.28); }
   body.night .pagebody mark { background: rgba(240,160,128,0.22); }
   body.night .pagebody mark.note-hl { border-bottom-color: #F4B094; }
+  body.night #note-tooltip { background:#302b28; color:#F3EFE9; }
 
   /* 三档纸张主题 */
   body.theme-paper { background: #FFFFFF; }
@@ -179,7 +197,7 @@
     pageW: 0, pageH: 0, colUnit: 0, viewW: 0, viewH: 0, sideMargin: 0,
     columnsPerView: 1, columnCount: 1, pageCount: 1, current: 0,
     fontSize: 26, lineHeight: 1.9,
-    fontFamily: "KaiTi,STKaiti,SimSun,serif",
+    fontFamily: "'Noto Serif SC Local',serif",
     night: false
   };
   var contentHTML = "";
@@ -192,7 +210,8 @@
 
   function applyCss() {
     root.style.setProperty("--font-size", cfg.fontSize + "px");
-    root.style.setProperty("--font-family", cfg.fontFamily);
+    // 英文字体始终固定在前，用户选的中文字体只作用于汉字
+    root.style.setProperty("--font-family", 'Georgia, "Times New Roman", ' + cfg.fontFamily + ', serif');
   }
 
   function measurePage() {
@@ -296,6 +315,29 @@
       requestAnimationFrame(function () {
         layout();
         if (startPage && startPage > 0) goToPage(Math.min(startPage, cfg.pageCount - 1));
+        document.fonts.ready.then(function () {
+          layout();
+          if (startPage && startPage > 0) goToPage(Math.min(startPage, cfg.pageCount - 1));
+        });
+      });
+    },
+    setNotes: function (notes) {
+      pagebody.querySelectorAll('mark.note-hl').forEach(function (mark) { mark.replaceWith(...mark.childNodes); });
+      pagebody.normalize();
+      var nodes = [], walker = document.createTreeWalker(pagebody, NodeFilter.SHOW_TEXT, null), node, pos = 0;
+      while ((node = walker.nextNode())) { nodes.push({ node: node, start: pos, end: pos + node.nodeValue.length }); pos += node.nodeValue.length; }
+      (notes || []).slice().sort(function (a,b) { return b.start - a.start; }).forEach(function (note) {
+        if (!Number.isInteger(note.start) || !Number.isInteger(note.end) || note.end <= note.start) return;
+        nodes.slice().reverse().forEach(function (item) {
+          if (item.end <= note.start || item.start >= note.end) return;
+          var from = Math.max(0, note.start - item.start), to = Math.min(item.end - item.start, note.end - item.start);
+          if (to <= from) return;
+          try {
+            var range = document.createRange(); range.setStart(item.node, from); range.setEnd(item.node, to);
+            var mark = document.createElement('mark'); mark.className = 'note-hl';
+            mark.dataset.note = note.text || '已保存摘录'; range.surroundContents(mark);
+          } catch (_) {}
+        });
       });
     },
     layout: layout,
@@ -313,7 +355,12 @@
         goToPage(clampPageFromOffset(idx));
       });
     },
-    setFontFamily: function (f) { cfg.fontFamily = f; applyCss(); var idx = visibleTextIndex(); requestAnimationFrame(function(){ layout(); goToPage(clampPageFromOffset(idx)); }); },
+    setFontFamily: function (f) {
+      var idx = visibleTextIndex();
+      cfg.fontFamily = f; applyCss();
+      requestAnimationFrame(function(){ layout(); goToPage(clampPageFromOffset(idx)); });
+      document.fonts.ready.then(function(){ layout(); goToPage(clampPageFromOffset(idx)); });
+    },
     setNight: function (on) { body.classList.toggle("night", on); },
     setTheme: function (t) {
       body.classList.remove("theme-paper","theme-sepia","night");
@@ -328,18 +375,21 @@
         var parts = [];
         var walker = document.createTreeWalker(pagebody, NodeFilter.SHOW_TEXT, null);
         var n;
-        var refRe = /^(参考文献|参考书目|引用文献|References|Bibliography)\s*$/i;
+        var refRe = /^(?:第[一二三四五六七八九十\d]+[章节篇]\s*)?(参考文献|参考书目|引用文献|文献目录|References|Bibliography)(?:\s*[：:].*)?$/i;
         var truncateAt = -1;
         var acc = 0;
         while ((n = walker.nextNode())) {
-          parts.push(n.nodeValue);
+          var parent = n.parentElement;
+          var citation = parent && parent.closest('sup, a[href^="#ref"], a[href^="#bib"]');
+          parts.push(citation && /^[\s\d０-９,，、\[\]［］【】()（）\-–—]+$/.test(n.nodeValue)
+            ? ' '.repeat(n.nodeValue.length) : n.nodeValue);
           // 命中独立"参考文献"标题则从这里截断朗读
-          if (truncateAt < 0 && n.nodeValue.trim().length > 0 && n.nodeValue.trim().length < 20 && refRe.test(n.nodeValue.trim()))
+          if (truncateAt < 0 && n.nodeValue.trim().length > 0 && n.nodeValue.trim().length < 48 && refRe.test(n.nodeValue.trim()))
             truncateAt = acc;
           acc += n.nodeValue.length;
         }
         var full = parts.join('');
-        if (truncateAt > 0) full = full.slice(0, truncateAt);
+        if (truncateAt >= 0) full = full.slice(0, truncateAt);
         // 按句末标点切句，保留标点
         var re = /[^。！？；!?;]+[。！？；!?;]*/g;
         var out = [];
@@ -351,6 +401,8 @@
             .replace(/https?:\/\/\S+/g, '')
             .replace(/[\w.+-]+@[\w-]+\.[\w.]+/g, '')
             .replace(/\[[0-9,\s,，\-–—]+\]/g, '')
+            .replace(/[［【][0-9０-９,，、\s\-–—]+[］】]/g, '')
+            .replace(/[¹²³⁴⁵⁶⁷⁸⁹⁰]+/g, '')
             .trim();
           if (spoken.length < 2) continue;
           out.push({ text: spoken, start: m.index, end: m.index + raw.length });
@@ -454,29 +506,28 @@
     },
     goToOffset: function (offset, onlyIfOffscreen) {
       try {
-        var pw = pager.getBoundingClientRect().width;
-        var lm = cfg.sideMargin || 0, rm = pw - lm;
         var walker = document.createTreeWalker(pagebody, NodeFilter.SHOW_TEXT, null);
         var acc = 0, tn;
         while ((tn = walker.nextNode())) {
           var len = tn.nodeValue.length;
-          if (offset < acc + len || acc + len === 0) {
+          if (offset < acc + len) {
             var off = Math.max(0, Math.min(offset - acc, len));
             var r = document.createRange();
-            r.setStart(tn, off); r.setEnd(tn, Math.min(off + 1, len));
+            r.setStart(tn, off);
+            r.setEnd(tn, Math.min(off + 1, len));
             var rect = r.getBoundingClientRect();
-            var visible = (rect.left > lm - 1 && rect.left < rm - 2);
-            if (onlyIfOffscreen && visible) return;
-            // 反推该文字在未平移内容里的 x，换算成页
-            var unshiftedX = rect.left - cfg.sideMargin + cfg.current * cfg.columnsPerView * cfg.colUnit;
-            var column = Math.max(0, Math.floor(unshiftedX / cfg.colUnit));
+            var windowLeft = spreadWindow.getBoundingClientRect().left;
+            // Range 的屏幕坐标加上当前滚动量，就是内容中的真实横向位置。
+            var contentX = rect.left - windowLeft + spreadWindow.scrollLeft;
+            var column = Math.max(0, Math.floor((contentX + 1) / cfg.colUnit));
             var page = Math.max(0, Math.min(cfg.pageCount - 1, Math.floor(column / cfg.columnsPerView)));
-            goToPage(page);
-            return;
+            if (!onlyIfOffscreen || page !== cfg.current) goToPage(page);
+            return page;
           }
           acc += len;
         }
-      } catch (e) {}
+      } catch (e) { console.log('goToOffset err: '+e); }
+      return cfg.current;
     },
     showHint: function (txt, ms) { hint.textContent = txt; hint.classList.add("show"); clearTimeout(hint._t); hint._t = setTimeout(function(){ hint.classList.remove("show"); }, ms || 2200); },
     highlight: function (start, end) {
@@ -545,6 +596,18 @@
   });
 
   // 右键：有选中文字时通知宿主弹出记笔记
+  var noteTooltip = document.createElement('div');
+  noteTooltip.id = 'note-tooltip';
+  document.body.appendChild(noteTooltip);
+  pagebody.addEventListener('mousemove', function (e) {
+    var mark = e.target.closest && e.target.closest('mark.note-hl');
+    if (!mark) { noteTooltip.style.display = 'none'; return; }
+    noteTooltip.textContent = mark.dataset.note || '已保存摘录';
+    noteTooltip.style.display = 'block';
+    noteTooltip.style.left = Math.max(8, Math.min(e.clientX + 14, innerWidth - noteTooltip.offsetWidth - 8)) + 'px';
+    noteTooltip.style.top = Math.max(8, Math.min(e.clientY + 16, innerHeight - noteTooltip.offsetHeight - 8)) + 'px';
+  });
+  pagebody.addEventListener('mouseleave', function () { noteTooltip.style.display = 'none'; });
   pagebody.addEventListener("contextmenu", function (e) {
     var sel = window.JTReader.getSelectionRange();
     if (sel) { e.preventDefault(); post({ type: "noteRequest", text: sel.text, start: sel.start, end: sel.end }); }

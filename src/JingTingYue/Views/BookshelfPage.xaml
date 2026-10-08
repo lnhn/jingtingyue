@@ -24,7 +24,9 @@
                     <Button Click="Theme_Click" Tag="sepia" Content="暖棕" Padding="9,6" FontSize="11" CornerRadius="9" Background="{StaticResource SidebarBgBrush}" Foreground="{StaticResource BookInkBrush}" BorderThickness="0"/>
                     <Button Click="Theme_Click" Tag="night" Content="夜间" Padding="9,6" FontSize="11" CornerRadius="9" Background="{StaticResource SidebarBgBrush}" Foreground="{StaticResource BookInkBrush}" BorderThickness="0"/>
                 </StackPanel>
-                <TextBlock x:Name="AboutText" Text="关于静听阅" FontSize="12" Foreground="{StaticResource MutedInkBrush}"/>
+                <Button Click="About_Click" Content="关于静听阅" HorizontalAlignment="Left" Padding="0,7"
+                        Background="Transparent" BorderThickness="0" FontSize="12"
+                        Foreground="{StaticResource MutedInkBrush}"/>
             </StackPanel>
             <Border Grid.ColumnSpan="1" HorizontalAlignment="Right" Width="1" Background="{StaticResource HairlineBrush}"/>
         </Grid>

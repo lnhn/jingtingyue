@@ -25,7 +25,7 @@ public sealed record VoiceInfo(string Id, string Name);
 public sealed class TtsService
 {
     private const string Base = "http://127.0.0.1:8123";
-    private static readonly HttpClient _http = new(new HttpClientHandler { UseProxy = false }) { Timeout = TimeSpan.FromSeconds(30) };
+    private static readonly HttpClient _http = new(new HttpClientHandler { UseProxy = false }) { Timeout = TimeSpan.FromSeconds(90) };
 
     private readonly MediaPlayer _player = new();
     private IReadOnlyList<SpokenSentence> _sentences = new List<SpokenSentence>();
@@ -38,6 +38,7 @@ public sealed class TtsService
     private int _clipStartedAt;
     private InMemoryRandomAccessStream? _keepAlive;
     private Microsoft.UI.Dispatching.DispatcherQueue? _disp;
+    private int _generation;
 
     public event Action<int>? SentenceStart;
     public event Action? Finished;
@@ -86,6 +87,7 @@ public sealed class TtsService
     {
         _disp = Microsoft.UI.Dispatching.DispatcherQueue.GetForCurrentThread();
         Stop();
+        if (sentences.Count == 0) { Finished?.Invoke(); return; }
         _sentences = sentences;
         _index = Math.Clamp(startIndex, 0, sentences.Count - 1);
         _playing = true;
@@ -98,28 +100,31 @@ public sealed class TtsService
         {
             StopInternal(); Finished?.Invoke(); return;
         }
+        int generation = _generation;
+        int index = _index;
         try
         {
             byte[] wav;
-            if (_cache.TryGetValue(_index, out var cached) && cached != null)
+            if (_cache.TryGetValue(index, out var cached) && cached != null)
                 wav = cached;
             else
-                wav = await FetchAsync(_index);
-            if (!_playing) return;
+                wav = await FetchAsync(index);
+            if (!_playing || generation != _generation || index != _index) return;
             Log($"got wav {wav.Length}B for #{_index}");
             // 预取后面两句，消除句间空档
             Prefetch(_index + 1);
             Prefetch(_index + 2);
 
-            if (_disp != null) _disp.TryEnqueue(() => StartPlayback(wav));
+            if (_disp != null) _disp.TryEnqueue(() => { if (generation == _generation && index == _index) StartPlayback(wav); });
             else StartPlayback(wav);
         }
         catch (Exception ex)
         {
-            if (!_playing) return;
-            Log("EX: " + ex.Message);
-            Error?.Invoke(ex.Message);
-            StopInternal(); Finished?.Invoke();
+            if (!_playing || generation != _generation || index != _index) return;
+            Log("skip sentence #" + _index + " : " + ex.Message);
+            // 这句生成失败，跳过继续下一句，不整体停
+            _index++;
+            PlayCurrent();
         }
     }
 
@@ -127,20 +132,43 @@ public sealed class TtsService
 
     private async Task<byte[]> FetchAsync(int i)
     {
+        var text = _sentences[i].Text;
+        Log($"fetching #{i} len={text.Length}");
         var payload = JsonSerializer.Serialize(new
         {
-            text = _sentences[i].Text, voice = _voice, speed = _rate,
+            text = text, voice = _voice, speed = _rate,
         });
-        var resp = await _http.PostAsync($"{Base}/tts",
-            new StringContent(payload, Encoding.UTF8, "application/json"));
-        resp.EnsureSuccessStatusCode();
-        return await resp.Content.ReadAsByteArrayAsync();
+        // 每句最多等待约 20 秒；局部失败交给播放队列跳过。
+        using var budget = new CancellationTokenSource(TimeSpan.FromSeconds(20));
+        // 短暂故障重试一次
+        for (int attempt = 1; attempt <= 2; attempt++)
+        {
+            try
+            {
+                var resp = await _http.PostAsync($"{Base}/tts",
+                    new StringContent(payload, Encoding.UTF8, "application/json"), budget.Token);
+                resp.EnsureSuccessStatusCode();
+                return await resp.Content.ReadAsByteArrayAsync(budget.Token);
+            }
+            catch (Exception ex)
+            {
+                Log($"fetch #{i} attempt {attempt} failed: {ex.Message}");
+                if (attempt == 2 || budget.IsCancellationRequested) throw;
+                await Task.Delay(600, budget.Token);
+            }
+        }
+        throw new InvalidOperationException("unreachable");
     }
 
     private async void Prefetch(int i)
     {
         if (i < 0 || i >= _sentences.Count || _cache.ContainsKey(i)) return;
-        try { _cache[i] = await FetchAsync(i); }
+        int generation = _generation;
+        try
+        {
+            var wav = await FetchAsync(i);
+            if (_playing && generation == _generation) _cache[i] = wav;
+        }
         catch { /* 预取失败，播放时再拉 */ }
     }
 
@@ -164,7 +192,12 @@ public sealed class TtsService
             _player.Play();
             StartPoll();
         }
-        catch (Exception ex) { Log("PlayEx: " + ex.Message); }
+        catch (Exception ex)
+        {
+            Log("PlayEx: " + ex.Message);
+            _index++;
+            PlayCurrent();
+        }
     }
 
     private void StartPoll()
@@ -186,13 +219,22 @@ public sealed class TtsService
             var s = _player.PlaybackSession;
             st = s.PlaybackState; pos = s.Position.TotalSeconds; dur = s.NaturalDuration.TotalSeconds;
         }
-        catch { return; }
+        catch
+        {
+            if (Environment.TickCount - _clipStartedAt > 5000)
+            {
+                _poll?.Dispose(); _poll = null; _index++; PlayCurrent();
+            }
+            return;
+        }
 
         if (st == MediaPlaybackState.Playing) _sawPlaying = true;
         bool ended = false;
         if (_sawPlaying && (pos >= dur - 0.15 || st == MediaPlaybackState.None)) ended = true;
         // 兜底：请求超时或服务无响应时，8 秒推进避免卡死
         if (!_sawPlaying && Environment.TickCount - _clipStartedAt > 8000) ended = true;
+        if (_sawPlaying && st != MediaPlaybackState.Playing && st != MediaPlaybackState.Paused &&
+            Environment.TickCount - _clipStartedAt > Math.Max(15000, (dur + 8) * 1000)) ended = true;
 
         if (ended) { _poll?.Dispose(); _poll = null; _index++; PlayCurrent(); }
     }
@@ -200,7 +242,7 @@ public sealed class TtsService
     public void Pause() { try { if (_player.PlaybackSession.PlaybackState == MediaPlaybackState.Playing) _player.Pause(); } catch { } }
     public void Resume() { try { if (_player.PlaybackSession.PlaybackState == MediaPlaybackState.Paused) _player.Play(); } catch { } }
 
-    public void Stop() { _playing = false; StopInternal(); }
+    public void Stop() { _generation++; _playing = false; StopInternal(); }
 
     private void StopInternal()
     {

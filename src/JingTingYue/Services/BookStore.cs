@@ -45,7 +45,25 @@ public static class BookStore
             var path = Path.Combine(EpubDir, b.EpubFile);
             if (!File.Exists(path)) continue;
             try { b.Book = EpubParser.Parse(path); } catch { b.Book = null; }
+
+            // 老数据没有封面，补提取
+            if (string.IsNullOrEmpty(b.CoverFile))
+            {
+                try
+                {
+                    var cover = EpubParser.ExtractCover(path);
+                    if (cover != null)
+                    {
+                        var coverName = b.Id + cover.Value.ext;
+                        File.WriteAllBytes(Path.Combine(EpubDir, coverName), cover.Value.data);
+                        b.CoverFile = coverName;
+                    }
+                }
+                catch { }
+            }
         }
+        // 封面提取后保存一次
+        await SaveAsync();
 
         Books.Clear();
         Books.AddRange(stored);      // 只保留真实导入的书
@@ -66,6 +84,16 @@ public static class BookStore
         Directory.CreateDirectory(EpubDir);
         File.Copy(sourceEpubPath, Path.Combine(EpubDir, fileName), overwrite: true);
 
+        // 提取封面
+        string? coverFile = null;
+        var cover = EpubParser.ExtractCover(Path.Combine(EpubDir, fileName));
+        if (cover != null)
+        {
+            var coverName = id + cover.Value.ext;
+            File.WriteAllBytes(Path.Combine(EpubDir, coverName), cover.Value.data);
+            coverFile = coverName;
+        }
+
         var hex = Palette[Books.Count % Palette.Length];
         var book = new StoredBook
         {
@@ -74,6 +102,7 @@ public static class BookStore
             Author = parsed.Author,
             CoverHex = hex,
             EpubFile = fileName,
+            CoverFile = coverFile ?? "",
             Book = parsed,
         };
         Books.Insert(0, book);

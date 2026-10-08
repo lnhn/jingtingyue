@@ -25,6 +25,13 @@ public sealed partial class ReaderPage : Page
     private bool _startingTts;
     private int _readRequestId;
     private int _speakingIdx;
+    private string _noteSelectionText = "";
+    private int _noteSelectionStart;
+    private int _noteSelectionEnd;
+    private int _noteChapter;
+    private bool _noteEditorBusy;
+    private WebView2? _shareWeb;
+    private bool _shareSaving;
 
     private static readonly (string No, string Title)[] SampleToc = new[]
     {
@@ -43,10 +50,47 @@ public sealed partial class ReaderPage : Page
             FillVoices();
             await InitWebViewAsync();
         };
+        // 键盘快捷键（用隧道事件，WebView2 聚焦时也能收到）
+        AddHandler(UIElement.KeyDownEvent, new Microsoft.UI.Xaml.Input.KeyEventHandler(OnKeyDown), true);
+    }
+
+    private void OnKeyDown(object sender, Microsoft.UI.Xaml.Input.KeyRoutedEventArgs e)
+    {
+        switch (e.Key)
+        {
+            case Windows.System.VirtualKey.Right:
+            case Windows.System.VirtualKey.Space:
+                _ = RunReader("window.JTReader.next();");
+                e.Handled = true;
+                break;
+            case Windows.System.VirtualKey.Left:
+                _ = RunReader("window.JTReader.prev();");
+                e.Handled = true;
+                break;
+            case Windows.System.VirtualKey.PageDown:
+                NavigateChapter(_currentChapter + 1);
+                e.Handled = true;
+                break;
+            case Windows.System.VirtualKey.PageUp:
+                NavigateChapter(_currentChapter - 1);
+                e.Handled = true;
+                break;
+            case Windows.System.VirtualKey.Escape:
+                if (PanelDismissLayer.Visibility == Visibility.Visible)
+                {
+                    DismissOverlay();
+                    e.Handled = true;
+                    break;
+                }
+                if (Frame.CanGoBack) Frame.GoBack();
+                e.Handled = true;
+                break;
+        }
     }
 
     private string _voiceId = "zf_xiaoxiao";
     private double _rate = 1.0;
+    private bool _syncingVoiceSelection;
 
     private async void FillVoices()
     {
@@ -61,12 +105,24 @@ public sealed partial class ReaderPage : Page
         try
         {
             SettingsVoiceCombo.Items.Clear();
+            VoiceGrid.Children.Clear();
+            VoiceGrid.RowDefinitions.Clear();
             foreach (var v in voices)
             {
                 SettingsVoiceCombo.Items.Add(new ComboBoxItem { Content = v.Name, Tag = v.Id });
                 AddVoiceCard(v.Id, v.Name);
             }
-            if (SettingsVoiceCombo.Items.Count > 0) SettingsVoiceCombo.SelectedIndex = 0;
+            if (voices.Count % 2 == 1 && VoiceGrid.Children.LastOrDefault() is ToggleButton lastCard)
+            {
+                Grid.SetColumnSpan(lastCard, 2);
+                lastCard.HorizontalAlignment = HorizontalAlignment.Center;
+                lastCard.Width = 190;
+            }
+            if (SettingsVoiceCombo.Items.Count > 0)
+            {
+                int selected = voices.FindIndex(v => v.Id == _voiceId);
+                SettingsVoiceCombo.SelectedIndex = selected >= 0 ? selected : 0;
+            }
             StyleVoiceCards();
             BuildRateSeg();
         }
@@ -79,19 +135,38 @@ public sealed partial class ReaderPage : Page
         while (VoiceGrid.RowDefinitions.Count <= row) VoiceGrid.RowDefinitions.Add(new RowDefinition());
         var card = new ToggleButton
         {
-            Height = 56, Margin = new Thickness(0,0,8,8), Padding = new Thickness(14,0,0,0),
+            Height = 54, Padding = new Thickness(12,0,12,0),
             CornerRadius = new CornerRadius(14),
             HorizontalAlignment = HorizontalAlignment.Stretch,
+            HorizontalContentAlignment = HorizontalAlignment.Center,
+            BorderThickness = new Thickness(0),
+            Tag = id,
         };
+        var selected = (Brush)Application.Current.Resources["SelectedSageBrush"];
+        var plain = (Brush)Application.Current.Resources["SidebarBgBrush"];
+        var ink = (Brush)Application.Current.Resources["BookInkBrush"];
+        card.Resources["ToggleButtonBackground"] = plain;
+        card.Resources["ToggleButtonBackgroundPointerOver"] = plain;
+        card.Resources["ToggleButtonBackgroundPressed"] = plain;
+        card.Resources["ToggleButtonBackgroundChecked"] = selected;
+        card.Resources["ToggleButtonBackgroundCheckedPointerOver"] = selected;
+        card.Resources["ToggleButtonBackgroundCheckedPressed"] = selected;
+        card.Resources["ToggleButtonForegroundChecked"] = ink;
+        card.Resources["ToggleButtonForegroundCheckedPointerOver"] = ink;
+        card.Resources["ToggleButtonForegroundCheckedPressed"] = ink;
+        card.Resources["ToggleButtonBorderBrushChecked"] = new SolidColorBrush(Microsoft.UI.Colors.Transparent);
+        card.Resources["ToggleButtonBorderBrushCheckedPointerOver"] = new SolidColorBrush(Microsoft.UI.Colors.Transparent);
         var sp = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 10 };
-        var dot = new FontIcon { Glyph = "&#xE73E;", FontSize = 14, Opacity = 0.0 };
         var txt = new TextBlock { Text = name, FontSize = 14, VerticalAlignment = VerticalAlignment.Center,
             Foreground = (Brush)Application.Current.Resources["BookInkBrush"] };
         sp.Children.Add(txt);
         card.Content = sp;
         card.IsChecked = id == _voiceId;
-        card.Checked += (s, e) => { _voiceId = id; _tts.SelectVoice(id); StyleVoiceCards();
-            if (_book != null) _ = BookStore.SaveSettingsAsync(_book.Id, voiceId: id); };
+        card.Checked += (s, e) => SelectVoice(id, true);
+        card.Unchecked += (s, e) =>
+        {
+            if (!_syncingVoiceSelection && _voiceId == id) card.IsChecked = true;
+        };
         Grid.SetRow(card, row);
         Grid.SetColumn(card, VoiceGrid.Children.Count % 2);
         VoiceGrid.Children.Add(card);
@@ -105,12 +180,31 @@ public sealed partial class ReaderPage : Page
                 bool on = b.IsChecked == true;
                 b.Background = on ? (Brush)Application.Current.Resources["SelectedSageBrush"]
                                   : (Brush)Application.Current.Resources["SidebarBgBrush"];
-                if (b.Content is StackPanel sp && sp.Children[0] is FontIcon dot)
-                {
-                    dot.Opacity = on ? 1 : 0;
-                    dot.Foreground = (Brush)Application.Current.Resources["ForestGreenBrush"];
-                }
             }
+    }
+
+    private void SelectVoice(string id, bool save)
+    {
+        if (_syncingVoiceSelection) return;
+        _syncingVoiceSelection = true;
+        try
+        {
+            _voiceId = id;
+            _tts.SelectVoice(id);
+            foreach (var child in VoiceGrid.Children)
+                if (child is ToggleButton card && card.Tag is string cardId)
+                    card.IsChecked = cardId == id;
+            foreach (var item in SettingsVoiceCombo.Items)
+                if (item is ComboBoxItem option && option.Tag is string optionId && optionId == id)
+                {
+                    if (!ReferenceEquals(SettingsVoiceCombo.SelectedItem, option))
+                        SettingsVoiceCombo.SelectedItem = option;
+                    break;
+                }
+            StyleVoiceCards();
+        }
+        finally { _syncingVoiceSelection = false; }
+        if (save && _book != null) _ = BookStore.SaveSettingsAsync(_book.Id, voiceId: id);
     }
 
     private static readonly double[] Rates = { 0.75, 1.0, 1.25, 1.5, 2.0 };
@@ -123,7 +217,7 @@ public sealed partial class ReaderPage : Page
             {
                 Height = 40, CornerRadius = new CornerRadius(12), BorderThickness = new Thickness(0),
                 Content = r.ToString("0.##") + "x", FontFamily = new FontFamily("Microsoft YaHei UI"),
-                FontSize = 13, Margin = new Thickness(i==0?0:6,0,0,0),
+                FontSize = 13, HorizontalAlignment = HorizontalAlignment.Stretch,
             };
             b.Click += (s, e) => { _rate = r; _tts.SetRate(r); StyleRateSeg(); };
             b.Tag = r;
@@ -257,7 +351,7 @@ public sealed partial class ReaderPage : Page
         core.SetVirtualHostNameToFolderMapping("jingtingyue.local", assetsDir, CoreWebView2HostResourceAccessKind.Allow);
         core.WebMessageReceived += OnWebMessageReceived;
         core.NavigationCompleted += OnNavigationCompleted;
-        core.Navigate("https://jingtingyue.local/reader/reader.html?v=7");
+        core.Navigate("https://jingtingyue.local/reader/reader.html?v=12");
     }
 
     private void OnNavigationCompleted(CoreWebView2 sender, CoreWebView2NavigationCompletedEventArgs args)
@@ -270,6 +364,15 @@ public sealed partial class ReaderPage : Page
         if (HasRealBook) return _book!.Book!.Chapters[_currentChapter].HtmlBody;
         var p = Path.Combine(AppContext.BaseDirectory, "Assets", "samples", "chapter1.html");
         return File.Exists(p) ? File.ReadAllText(p) : "<p>（示例内容缺失）</p>";
+    }
+
+    private string ChapterNotesScript()
+    {
+        if (!HasRealBook || _book!.Id.StartsWith("sample-")) return "window.JTReader.setNotes([]);";
+        var notes = NoteStore.ForBook(_book.Id)
+            .Where(n => n.ChapterIndex == _currentChapter)
+            .Select(n => new { start = n.CharStart, end = n.CharEnd, text = n.NoteText });
+        return $"window.JTReader.setNotes({JsonSerializer.Serialize(notes)});";
     }
 
     private void OnWebMessageReceived(CoreWebView2 sender, CoreWebView2WebMessageReceivedEventArgs args)
@@ -298,7 +401,7 @@ public sealed partial class ReaderPage : Page
                 _suppressOneSave = restore > 0;
                 var startArg = restore >= 0 ? "," + restore : "";
                 _ = sender.ExecuteScriptAsync(
-                    $"window.JTReader.setContent({JsonSerializer.Serialize(html)}{startArg});");
+                    $"window.JTReader.setContent({JsonSerializer.Serialize(html)}{startArg});{ChapterNotesScript()}");
             }
             else if (type == "pageChanged")
             {
@@ -364,7 +467,7 @@ public sealed partial class ReaderPage : Page
                     ? (Brush)Application.Current.Resources["SelectedSageBrush"]
                     : new SolidColorBrush(Microsoft.UI.Colors.Transparent);
         UpdateChapterButtons();
-        _ = RunReader($"window.JTReader.setContent({JsonSerializer.Serialize(CurrentChapterHtml())});");
+        _ = RunReader($"window.JTReader.setContent({JsonSerializer.Serialize(CurrentChapterHtml())});{ChapterNotesScript()}");
         if (_book is { } book && !book.Id.StartsWith("sample-"))
             _ = BookStore.UpdateProgressAsync(book.Id, index, 0, Math.Min(99, (int)Math.Round(100.0 * index / ChapterCount)));
     }
@@ -411,11 +514,7 @@ public sealed partial class ReaderPage : Page
     private void SettingsVoiceCombo_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
         if (SettingsVoiceCombo.SelectedItem is ComboBoxItem it && it.Tag is string id)
-        {
-            _voiceId = id;
-            _tts.SelectVoice(id);
-            if (_book != null) _ = BookStore.SaveSettingsAsync(_book.Id, voiceId: id);
-        }
+            SelectVoice(id, true);
     }
 
     private void SettingsRateSlider_ValueChanged(object sender, RangeBaseValueChangedEventArgs e)
@@ -430,7 +529,42 @@ public sealed partial class ReaderPage : Page
 
     private void OpenTtsPanel_Click(object sender, RoutedEventArgs e)
     {
-        TtsPanel.Visibility = Visibility.Visible;
+        ShowOverlay(TtsPanel);
+    }
+
+    private void ShowOverlay(Border panel)
+    {
+        TtsPanel.Visibility = Visibility.Collapsed;
+        NotesPanel.Visibility = Visibility.Collapsed;
+        SettingsPanel.Visibility = Visibility.Collapsed;
+        NoteEditorPanel.Visibility = Visibility.Collapsed;
+        if (panel != SharePanel) CloseShare();
+        panel.Visibility = Visibility.Visible;
+        PanelDismissLayer.Visibility = Visibility.Visible;
+    }
+
+    private void RefreshDismissLayer()
+    {
+        PanelDismissLayer.Visibility = TtsPanel.Visibility == Visibility.Visible ||
+            NotesPanel.Visibility == Visibility.Visible || SettingsPanel.Visibility == Visibility.Visible ||
+            NoteEditorPanel.Visibility == Visibility.Visible || SharePanel.Visibility == Visibility.Visible
+            ? Visibility.Visible : Visibility.Collapsed;
+    }
+
+    private void PanelDismissLayer_Tapped(object sender, Microsoft.UI.Xaml.Input.TappedRoutedEventArgs e) => DismissOverlay();
+
+    private void OutsidePanel_PointerPressed(object sender, Microsoft.UI.Xaml.Input.PointerRoutedEventArgs e)
+    {
+        if (PanelDismissLayer.Visibility == Visibility.Visible) DismissOverlay();
+    }
+
+    private void DismissOverlay()
+    {
+        if (SharePanel.Visibility == Visibility.Visible) CloseShare();
+        else if (NoteEditorPanel.Visibility == Visibility.Visible) CloseNoteEditor();
+        else if (SettingsPanel.Visibility == Visibility.Visible) CloseSettings_Click(this, new RoutedEventArgs());
+        else if (NotesPanel.Visibility == Visibility.Visible) CloseNotes_Click(this, new RoutedEventArgs());
+        else if (TtsPanel.Visibility == Visibility.Visible) CloseTtsPanel_Click(this, new RoutedEventArgs());
     }
 
     private async void StartTts_Click(object sender, RoutedEventArgs e)
@@ -454,6 +588,7 @@ public sealed partial class ReaderPage : Page
     {
         if (_startingTts && !_ttsActive) _readRequestId++;
         TtsPanel.Visibility = Visibility.Collapsed;
+        RefreshDismissLayer();
     }
 
     private async Task StartReadingAsync(int requestId)
@@ -496,7 +631,7 @@ public sealed partial class ReaderPage : Page
             StopTtsButton.IsEnabled = true;
             _tts.SelectVoice(_voiceId);
             _tts.SetRate(_rate);
-            TtsPanel.Visibility = Visibility.Visible;
+            ShowOverlay(TtsPanel);
             StartTtsLabel.Text = "暂停朗读";
                         TtsStatus.Text = "● 正在朗读";
             _tts.Start(_sentences.Select(s => new SpokenSentence(s.text, s.start, s.end)).ToList(), startIdx);
@@ -514,15 +649,40 @@ public sealed partial class ReaderPage : Page
             if (idx >= _sentences.Count) return;
             _speakingIdx = idx;
             var s = _sentences[idx];
-            await RunReader($"window.JTReader.highlightRange({s.start},{s.end});");
-            // 仅当朗读句不在当前可见页时才自动翻页跟随
-            await RunReader($"window.JTReader.goToOffset({s.start}, true);");
+            // 朗读句进入下一页时再翻页，当前页内只更新高亮。
+            await RunReader($"window.JTReader.highlightRange({s.start},{s.end});window.JTReader.goToOffset({s.start}, true);");
         });
     }
 
     private void OnTtsFinished()
     {
-        _ = DispatcherQueue.TryEnqueue(StopReading);
+        _ = DispatcherQueue.TryEnqueue(async () =>
+        {
+            bool hadMore = _currentChapter < ChapterCount - 1;
+            StopReading();
+            if (!hadMore)
+            {
+                TtsStatus.Text = "● 本书朗读完毕";
+                return;
+            }
+            // 弹对话框问要不要读下一章
+            var dialog = new ContentDialog
+            {
+                Title = "继续朗读",
+                Content = $"本章已读完，是否继续朗读下一章？",
+                PrimaryButtonText = "继续",
+                CloseButtonText = "不用了",
+                DefaultButton = ContentDialogButton.Primary,
+                XamlRoot = this.Content.XamlRoot,
+            };
+            var result = await dialog.ShowAsync();
+            if (result == ContentDialogResult.Primary)
+            {
+                NavigateChapter(_currentChapter + 1);
+                await Task.Delay(500); // 等 WebView 加载新章节
+                await StartReadingAsync(++_readRequestId);
+            }
+        });
     }
 
     private void OnTtsError(string msg)
@@ -558,6 +718,7 @@ public sealed partial class ReaderPage : Page
         _tts.Error -= OnTtsError;
         StartTtsLabel.Text = "开始朗读";
         TtsPanel.Visibility = Visibility.Collapsed;
+        RefreshDismissLayer();
         _ = RunReader("window.JTReader.highlightRange(0,0);");
     }
 
@@ -584,7 +745,7 @@ public sealed partial class ReaderPage : Page
             await RunReader("window.JTReader.showHint('请先在正文里选中要记的文字', 2200);");
             return;
         }
-        string selText = "", noteText = "";
+        string selText = "";
         int selStart = 0, selEnd = 0;
         try
         {
@@ -604,40 +765,55 @@ public sealed partial class ReaderPage : Page
             await RunReader("window.JTReader.showHint('示例书不能写笔记，请先导入 EPUB', 2500);");
             return;
         }
-        string noteText;
-        var selBox = new TextBox { Text = selText, IsReadOnly = true, AcceptsReturn = true, Height = 90 };
-        var inputBox = new TextBox { PlaceholderText = "写下你的想法…", AcceptsReturn = true, Height = 100 };
-        var panel = new StackPanel { Spacing = 10 };
-        panel.Children.Add(new TextBlock { Text = "选中原文", FontSize = 12, Foreground = (Brush)Application.Current.Resources["MutedInkBrush"] });
-        panel.Children.Add(selBox);
-        panel.Children.Add(new TextBlock { Text = "我的想法", FontSize = 12, Foreground = (Brush)Application.Current.Resources["MutedInkBrush"] });
-        panel.Children.Add(inputBox);
+        _noteSelectionText = selText.Trim();
+        _noteSelectionStart = selStart;
+        _noteSelectionEnd = selEnd;
+        _noteChapter = _currentChapter;
+        NoteEditorBookTitle.Text = BookTitleText.Text;
+        NoteQuoteText.Text = _noteSelectionText;
+        NoteEditorInput.Text = "";
+        ShowOverlay(NoteEditorPanel);
+        NoteEditorInput.Focus(FocusState.Programmatic);
+    }
 
-        var dialog = new ContentDialog
-        {
-            Title = "写笔记",
-            Content = panel,
-            PrimaryButtonText = "保存",
-            CloseButtonText = "取消",
-            DefaultButton = ContentDialogButton.Primary,
-            XamlRoot = Content.XamlRoot,
-        };
-        var result = await dialog.ShowAsync();
-        if (result != ContentDialogResult.Primary) return;
+    private void CloseNoteEditor_Click(object sender, RoutedEventArgs e) => CloseNoteEditor();
 
-        noteText = inputBox.Text?.Trim() ?? "";
+    private void CloseNoteEditor()
+    {
+        if (_noteEditorBusy) return;
+        NoteEditorPanel.Visibility = Visibility.Collapsed;
+        RefreshDismissLayer();
+    }
+
+    private async void SaveNoteEditor_Click(object sender, RoutedEventArgs e)
+    {
+        if (_noteEditorBusy || !HasRealBook) return;
+        _noteEditorBusy = true;
+        NoteEditorSaveButton.IsEnabled = false;
+        int start = _noteSelectionStart, end = _noteSelectionEnd;
         var note = new BookNote
         {
-            BookId = _book.Id,
-            ChapterIndex = _currentChapter,
-            CharStart = selStart,
-            CharEnd = selEnd,
-            SelectedText = selText.Trim(),
-            NoteText = noteText,
+            BookId = _book!.Id,
+            ChapterIndex = _noteChapter,
+            CharStart = start,
+            CharEnd = end,
+            SelectedText = _noteSelectionText,
+            NoteText = NoteEditorInput.Text?.Trim() ?? "",
         };
-        await NoteStore.AddAsync(note);
-        await RunReader($"window.JTReader.markNoteRange({selStart},{selEnd});");
-        await RunReader("window.JTReader.showHint('笔记已保存', 1600);");
+        try
+        {
+            await NoteStore.AddAsync(note);
+            NoteEditorPanel.Visibility = Visibility.Collapsed;
+            RefreshDismissLayer();
+            if (_currentChapter == _noteChapter)
+                await RunReader(ChapterNotesScript());
+            await RunReader("window.JTReader.showHint('笔记已保存', 1600);");
+        }
+        finally
+        {
+            _noteEditorBusy = false;
+            NoteEditorSaveButton.IsEnabled = true;
+        }
     }
 
     private void NotesList_Click(object sender, RoutedEventArgs e) => OpenNotesPanel();
@@ -646,13 +822,21 @@ public sealed partial class ReaderPage : Page
     {
         NotesBookLabel.Text = $"{BookTitleText.Text} · {BookAuthorText.Text}";
         RenderNotes("");
-        NotesPanel.Visibility = Visibility.Visible;
+        ShowOverlay(NotesPanel);
     }
 
-    private void CloseNotes_Click(object sender, RoutedEventArgs e) => NotesPanel.Visibility = Visibility.Collapsed;
+    private void CloseNotes_Click(object sender, RoutedEventArgs e)
+    {
+        NotesPanel.Visibility = Visibility.Collapsed;
+        RefreshDismissLayer();
+    }
 
-    private void OpenSettings_Click(object sender, RoutedEventArgs e) => SettingsPanel.Visibility = Visibility.Visible;
-    private void CloseSettings_Click(object sender, RoutedEventArgs e) => SettingsPanel.Visibility = Visibility.Collapsed;
+    private void OpenSettings_Click(object sender, RoutedEventArgs e) => ShowOverlay(SettingsPanel);
+    private void CloseSettings_Click(object sender, RoutedEventArgs e)
+    {
+        SettingsPanel.Visibility = Visibility.Collapsed;
+        RefreshDismissLayer();
+    }
 
     private void NotesSearch_TextChanged(object sender, TextChangedEventArgs e) =>
         RenderNotes(NotesSearch.Text?.Trim() ?? "");
@@ -708,10 +892,11 @@ public sealed partial class ReaderPage : Page
     {
         if (sender is not HyperlinkButton hb || hb.Tag is not BookNote note) return;
         NotesPanel.Visibility = Visibility.Collapsed;
+        RefreshDismissLayer();
         if (note.ChapterIndex != _currentChapter)
         {
             _currentChapter = note.ChapterIndex;
-            await RunReader($"window.JTReader.setContent({JsonSerializer.Serialize(CurrentChapterHtml())});");
+            await RunReader($"window.JTReader.setContent({JsonSerializer.Serialize(CurrentChapterHtml())});{ChapterNotesScript()}");
             await Task.Delay(250);
         }
         await RunReader($"window.JTReader.goToOffset({note.CharStart}, false);");
@@ -725,7 +910,7 @@ public sealed partial class ReaderPage : Page
         {
             _currentChapter = note.ChapterIndex;
             var html = CurrentChapterHtml();
-            await RunReader($"window.JTReader.setContent({JsonSerializer.Serialize(html)});");
+            await RunReader($"window.JTReader.setContent({JsonSerializer.Serialize(html)});{ChapterNotesScript()}");
             await Task.Delay(250);
         }
         await RunReader($"window.JTReader.goToOffset({note.CharStart}, false);");
@@ -735,26 +920,55 @@ public sealed partial class ReaderPage : Page
     private async void ShareNote_Click(object sender, RoutedEventArgs e)
     {
         if (sender is not HyperlinkButton hb || hb.Tag is not BookNote note) return;
-        var web = new WebView2 { Width = 460, Height = 620 };
-        var panel = new StackPanel { Spacing = 10 };
-        panel.Children.Add(new TextBlock { Text = "分享卡片预览", FontSize = 12, Foreground = (Brush)Application.Current.Resources["MutedInkBrush"] });
-        panel.Children.Add(web);
-        var dialog = new ContentDialog
+        NotesPanel.Visibility = Visibility.Collapsed;
+        SharePreviewHost.Children.Clear();
+        var web = new WebView2 { Width = ShareCard.PreviewWidth, Height = ShareCard.PreviewHeight };
+        _shareWeb = web;
+        SharePreviewHost.Children.Add(web);
+        ShowOverlay(SharePanel);
+        SaveShareButton.IsEnabled = false;
+        try
         {
-            Title = "分享卡片",
-            Content = panel,
-            PrimaryButtonText = "保存 PNG 到图片",
-            CloseButtonText = "关闭",
-            XamlRoot = Content.XamlRoot,
-        };
-        await ShareCard.LoadCardAsync(web, note.SelectedText, note.NoteText,
-            BookTitleText.Text, BookAuthorText.Text);
-        var r = await dialog.ShowAsync();
-        if (r == ContentDialogResult.Primary)
+            await ShareCard.LoadCardAsync(web, note.SelectedText, note.NoteText,
+                BookTitleText.Text, BookAuthorText.Text);
+            if (ReferenceEquals(_shareWeb, web)) SaveShareButton.IsEnabled = true;
+        }
+        catch
+        {
+            CloseShare();
+            await RunReader("window.JTReader.showHint('卡片预览失败，请重试', 3000);");
+        }
+    }
+
+    private void CloseShare_Click(object sender, RoutedEventArgs e) => CloseShare();
+
+    private void CloseShare()
+    {
+        if (_shareSaving) return;
+        SharePanel.Visibility = Visibility.Collapsed;
+        SharePreviewHost.Children.Clear();
+        _shareWeb = null;
+        RefreshDismissLayer();
+    }
+
+    private async void SaveShare_Click(object sender, RoutedEventArgs e)
+    {
+        var web = _shareWeb;
+        if (web is null) return;
+        _shareSaving = true;
+        SaveShareButton.IsEnabled = false;
+        try
         {
             var path = await ShareCard.CaptureToPngAsync(web);
-            await RunReader($"window.JTReader.showHint('已保存到: {path.Replace("\\","/")}', 4000);");
+            _shareSaving = false;
+            CloseShare();
+            await RunReader($"window.JTReader.showHint({JsonSerializer.Serialize($"已保存到: {path}")}, 4000);");
         }
+        catch
+        {
+            await RunReader("window.JTReader.showHint('保存卡片失败，请重试', 3000);");
+        }
+        finally { _shareSaving = false; SaveShareButton.IsEnabled = true; }
     }
 
     private void BackShelf_Click(object sender, RoutedEventArgs e)
