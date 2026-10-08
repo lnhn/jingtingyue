@@ -6,9 +6,7 @@ namespace JingTingYue.Services;
 
 public static class AppTheme
 {
-    private static readonly string ThemeFile = Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-        "JingTingYue", "theme.txt");
+    private static readonly string ThemeFile = Path.Combine(DataPaths.Root, "theme.txt");
 
     public static string Current { get; private set; } = "paper";
 

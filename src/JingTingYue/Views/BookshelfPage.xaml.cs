@@ -164,9 +164,7 @@ public sealed partial class BookshelfPage : Page
         };
 
         // 有封面图就显示图片，否则显示纯色+文字
-        var coverPath = Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-            "JingTingYue", "epubs", b.CoverFile);
+        var coverPath = Path.Combine(DataPaths.Root, "epubs", b.CoverFile);
         if (!string.IsNullOrEmpty(b.CoverFile) && File.Exists(coverPath))
         {
             var img = new Image

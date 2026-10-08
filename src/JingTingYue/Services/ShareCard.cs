@@ -20,8 +20,12 @@ public static class ShareCard
     /// <summary>把渲染好的 WebView2 内容捕获为 PNG，返回保存路径。</summary>
     public static async Task<string> CaptureToPngAsync(WebView2 web)
     {
+        var outputDir = DataPaths.IsPortable
+            ? Path.Combine(DataPaths.Root, "分享卡片")
+            : Environment.GetFolderPath(Environment.SpecialFolder.MyPictures);
+        Directory.CreateDirectory(outputDir);
         var outPath = Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.MyPictures),
+            outputDir,
             $"静听阅_{DateTime.Now:yyyyMMdd_HHmmss}.png");
         // 3:4 竖版预览；导出时按 3 倍尺寸重新渲染同一张卡片。
         var previewHeight = web.Height;

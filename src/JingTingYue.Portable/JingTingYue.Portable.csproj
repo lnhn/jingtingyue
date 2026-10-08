@@ -1,0 +1,19 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <SelfContained>true</SelfContained>
+    <PublishSingleFile>true</PublishSingleFile>
+    <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
+    <UseWindowsForms>true</UseWindowsForms>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <ApplicationIcon>..\JingTingYue\Assets\app.ico</ApplicationIcon>
+    <Version>1.2.0</Version>
+  </PropertyGroup>
+  <ItemGroup>
+    <EmbeddedResource Include="..\..\portable-payload.zip" LogicalName="JingTingYue.Payload" />
+    <EmbeddedResource Include="..\..\portable-payload.sha256" LogicalName="JingTingYue.PayloadHash" />
+  </ItemGroup>
+</Project>

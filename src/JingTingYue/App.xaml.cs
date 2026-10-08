@@ -10,6 +10,8 @@ public partial class App : Application
 
     public App()
     {
+        if (DataPaths.IsPortable)
+            Environment.SetEnvironmentVariable("WEBVIEW2_USER_DATA_FOLDER", Path.Combine(DataPaths.Root, "WebView2"));
         var bundledWebView = Path.Combine(AppContext.BaseDirectory, "WebView2Fixed");
         if (File.Exists(Path.Combine(bundledWebView, "msedgewebview2.exe")))
             Environment.SetEnvironmentVariable("WEBVIEW2_BROWSER_EXECUTABLE_FOLDER", bundledWebView);

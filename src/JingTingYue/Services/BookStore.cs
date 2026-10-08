@@ -5,14 +5,13 @@ namespace JingTingYue.Services;
 
 /// <summary>
 /// 应用级书单。真实导入的书持久化到本地：
-///   %LOCALAPPDATA%\JingTingYue\books.json          —— 书单与阅读位置
-///   %LOCALAPPDATA%\JingTingYue\epubs\{id}.epub     —— 书籍本体副本
+///   DataPaths.Root\books.json          —— 书单与阅读位置
+///   DataPaths.Root\epubs\{id}.epub     —— 书籍本体副本
 /// 三本示例书仅内存展示，不落盘。
 /// </summary>
 public static class BookStore
 {
-    private static readonly string Root =
-        Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "JingTingYue");
+    private static readonly string Root = DataPaths.Root;
     private static readonly string BooksFile = Path.Combine(Root, "books.json");
     private static readonly string EpubDir = Path.Combine(Root, "epubs");
 
@@ -62,12 +61,11 @@ public static class BookStore
                 catch { }
             }
         }
-        // 封面提取后保存一次
-        await SaveAsync();
-
         Books.Clear();
         Books.AddRange(stored);      // 只保留真实导入的书
         Loaded = true;
+        // 封面提取后保存一次，须在载入书单后执行，避免清空已存书籍。
+        await SaveAsync();
     }
 
     private static async Task SaveAsync()

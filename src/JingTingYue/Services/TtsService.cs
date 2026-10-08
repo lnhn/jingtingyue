@@ -47,7 +47,7 @@ public sealed class TtsService
     internal static void Log(string msg)
     {
         try { File.AppendAllText(Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "JingTingYue", "tts.log"),
+            DataPaths.Root, "tts.log"),
             $"[{DateTime.Now:HH:mm:ss}] {msg}\n"); } catch { }
     }
 

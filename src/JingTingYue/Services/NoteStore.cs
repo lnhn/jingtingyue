@@ -4,13 +4,12 @@ using JingTingYue.Models;
 namespace JingTingYue.Services;
 
 /// <summary>
-/// 笔记持久化：%LOCALAPPDATA%\JingTingYue\notes.json。
+/// 笔记持久化：DataPaths.Root\notes.json。
 /// 损坏文件不崩，回退为空列表并重新生成（不静默覆盖已有数据到别处——第六阶段再加备份）。
 /// </summary>
 public static class NoteStore
 {
-    private static readonly string Root =
-        Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "JingTingYue");
+    private static readonly string Root = DataPaths.Root;
     private static readonly string NotesFile = Path.Combine(Root, "notes.json");
 
     public static List<BookNote> Notes { get; } = new();
@@ -34,6 +33,7 @@ public static class NoteStore
 
     private static async Task SaveAsync()
     {
+        Directory.CreateDirectory(Root);
         var json = JsonSerializer.Serialize(Notes, new JsonSerializerOptions { WriteIndented = true });
         await File.WriteAllTextAsync(NotesFile, json);
     }

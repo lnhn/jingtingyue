@@ -2,6 +2,10 @@
 bin/
 obj/
 publish/
+build/
+dist/
+portable-payload.zip
+portable-payload.sha256
 
 # 发布包
 *.zip
