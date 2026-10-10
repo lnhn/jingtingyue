@@ -1,3 +1,4 @@
+using JingTingYue.Services;
 using JingTingYue.Views;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Media;
@@ -14,6 +15,12 @@ public sealed partial class MainWindow : Window
         SetTitleBar(AppTitleBar);
         RootFrame.Navigate(typeof(BookshelfPage));
         ApplyTitleBarTheme(JingTingYue.Services.AppTheme.Current);
+        Closed += MainWindow_Closed;
+    }
+
+    private void MainWindow_Closed(object sender, WindowEventArgs args)
+    {
+        TtsServer.Stop();
     }
 
     public void ApplyTitleBarTheme(string theme)

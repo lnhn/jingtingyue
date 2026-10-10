@@ -37,7 +37,7 @@ def main() -> None:
 
     tts = RUNTIME / "tts-server"
     tts.mkdir(exist_ok=True)
-    for name in ("server.py", "model_uint8.onnx", "voices.npz"):
+    for name in ("server.py", "mixed_phonemes.py", "punctuation_audio.py", "model_uint8.onnx", "voices.npz"):
         shutil.copy2(source(ROOT / "tts-server" / name, ROOT / "publish/tts-server" / name), tts / name)
     shutil.copytree(
         source(ROOT / "tts-server/python", ROOT / "publish/tts-server/python"),

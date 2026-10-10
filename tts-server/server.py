@@ -1,17 +1,21 @@
 import io
-import re
+import os
+import threading
+import time
+from functools import lru_cache
+import onnxruntime as ort
 import soundfile as sf
 from fastapi import FastAPI
 from fastapi.responses import Response
 from pydantic import BaseModel
 from kokoro_onnx import Kokoro
 from misaki.zh import ZHG2P
+from mixed_phonemes import has_chinese, to_phonemes
+from punctuation_audio import synthesize
 
-import os
 MODEL = "model_uint8.onnx" if os.path.exists("model_uint8.onnx") else "model.onnx"
 VOICES = "voices.npz"
 
-# 中文音色。只暴露真实存在的。
 ZH_VOICES = {
     "女声·晓晓": "zf_xiaoxiao",
     "女声·小北": "zf_xiaobei",
@@ -21,8 +25,17 @@ ZH_VOICES = {
 }
 
 print("loading kokoro...", flush=True)
-kokoro = Kokoro(MODEL, VOICES)
+session_options = ort.SessionOptions()
+# Small CPUs can spend more time coordinating ONNX worker threads than inferring.
+session_options.intra_op_num_threads = min(2, os.cpu_count() or 1)
+session_options.inter_op_num_threads = 1
+session = ort.InferenceSession(MODEL, sess_options=session_options,
+                               providers=["CPUExecutionProvider"])
+kokoro = Kokoro.from_session(session, VOICES)
+voice_styles = {voice: kokoro.get_voice_style(voice) for voice in ZH_VOICES.values()}
 zh_g2p = ZHG2P()
+_g2p_lock = threading.Lock()
+_synthesis_slots = threading.BoundedSemaphore(2)
 print("kokoro ready", flush=True)
 
 app = FastAPI()
@@ -36,11 +49,9 @@ class TtsReq(BaseModel):
 def voices():
     return {"voices": [{"id": k, "name": v} for k, v in ZH_VOICES.items()]}
 
-def to_phonemes(text: str) -> str:
-    # 含中文时用 misaki 的 pypinyin G2P 转 IPA；否则交给 espeak
-    if re.search(r'[\u4e00-\u9fff]', text):
-        return zh_g2p(text)
-    return text
+@lru_cache(maxsize=256)
+def english_phonemes(text: str) -> str:
+    return kokoro.tokenizer.phonemize(text, "en-us")
 
 @app.post("/tts")
 def tts(req: TtsReq):
@@ -49,10 +60,25 @@ def tts(req: TtsReq):
         return Response(status_code=204)
     voice = req.voice if req.voice in ZH_VOICES.values() else "zf_xiaoxiao"
     speed = max(0.6, min(1.8, req.speed))
-    ipa = to_phonemes(text)
-    samples, sr = kokoro.create(ipa, voice=voice, speed=speed, lang="cmn", is_phonemes=True)
+    started = time.perf_counter()
+
+    try:
+        with _synthesis_slots:
+            # Only text conversion is serialized; clauses share one request and one WAV.
+            with _g2p_lock:
+                ipa = to_phonemes(text, zh_g2p, english_phonemes)
+            lang = "cmn" if has_chinese(text) else "en-us"
+            samples, sr = synthesize(ipa, speed, lambda fragment: kokoro.create(
+                fragment, voice=voice_styles[voice], speed=speed, lang=lang,
+                is_phonemes=True))
+    except Exception as e:
+        print(f"tts error: {e!r}", flush=True)
+        return Response(content=f"synthesis failed: {e!r}", media_type="text/plain", status_code=500)
+
     buf = io.BytesIO()
     sf.write(buf, samples, sr, format="WAV")
+    print(f"tts complete: chars={len(text)} elapsed={time.perf_counter() - started:.2f}s "
+          f"audio={len(samples) / sr:.2f}s", flush=True)
     return Response(content=buf.getvalue(), media_type="audio/wav")
 
 if __name__ == "__main__":

@@ -69,9 +69,44 @@ public sealed partial class BookshelfPage : Page
     protected override void OnNavigatedTo(Microsoft.UI.Xaml.Navigation.NavigationEventArgs e)
     {
         base.OnNavigatedTo(e);
+        BuildTopNav();
         BuildBooks();
         BuildContinue();
         UpdateThemeButtons();
+    }
+
+    private void BuildTopNav()
+    {
+        TopNavPanel.Children.Clear();
+        AddTopItem("私人书库", "\uE82D", true, () => { _filter = null; BuildBooks(); });
+        AddTopItem("朗读片段", "\uE8D6", false, () => Frame.Navigate(typeof(SnippetsPage)));
+    }
+
+    private void AddTopItem(string label, string glyph, bool selected, Action onClick)
+    {
+        var row = new Grid();
+        row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        var icon = new FontIcon { Glyph = glyph, FontFamily = new FontFamily("Segoe MDL2 Assets"), FontSize = 15,
+            Foreground = selected ? (Brush)Application.Current.Resources["BookInkBrush"] : (Brush)Application.Current.Resources["MutedInkBrush"],
+            VerticalAlignment = VerticalAlignment.Center };
+        row.Children.Add(icon);
+        var text = new TextBlock { Text = label,
+            Foreground = selected ? (Brush)Application.Current.Resources["BookInkBrush"] : (Brush)Application.Current.Resources["MutedInkBrush"],
+            FontFamily = new FontFamily("Microsoft YaHei UI"), FontSize = 14, VerticalAlignment = VerticalAlignment.Center,
+            Margin = new Thickness(10, 0, 0, 0) };
+        Grid.SetColumn(text, 1);
+        row.Children.Add(text);
+
+        var item = new Border
+        {
+            Background = selected ? (Brush)Application.Current.Resources["SelectedSageBrush"] : new SolidColorBrush(Microsoft.UI.Colors.Transparent),
+            CornerRadius = new CornerRadius(10),
+            Padding = new Thickness(12, 9, 12, 9),
+            Child = row,
+        };
+        item.PointerPressed += (s, e) => onClick();
+        TopNavPanel.Children.Add(item);
     }
 
     private string? _filter; // null=全部, ""=未分类, 其他=分类名

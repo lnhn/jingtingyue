@@ -28,4 +28,7 @@ local.settings.json
 .vscode/
 .idea/
 
+# 本机 NuGet 缓存配置
+/NuGet.Config
+
 tts-server/*.wav

@@ -16,6 +16,7 @@ public partial class App : Application
         if (File.Exists(Path.Combine(bundledWebView, "msedgewebview2.exe")))
             Environment.SetEnvironmentVariable("WEBVIEW2_BROWSER_EXECUTABLE_FOLDER", bundledWebView);
         InitializeComponent();
+        AppDomain.CurrentDomain.ProcessExit += (_, _) => TtsServer.Stop();
     }
 
     protected override async void OnLaunched(LaunchActivatedEventArgs args)
@@ -23,6 +24,7 @@ public partial class App : Application
         AppTheme.Load();
         await BookStore.LoadAsync();
         await NoteStore.LoadAsync();
+        await SnippetStore.LoadAsync();
         _ = TtsServer.EnsureStartedAsync();
         var window = new MainWindow();
         CurrentWindow = window;

@@ -627,13 +627,14 @@ public sealed partial class ReaderPage : Page
             _tts.SentenceStart += OnTtsSentence;
             _tts.Finished += OnTtsFinished;
             _tts.Error += OnTtsError;
+            _tts.Buffering += OnTtsBuffering;
             _ttsActive = true;
             StopTtsButton.IsEnabled = true;
             _tts.SelectVoice(_voiceId);
             _tts.SetRate(_rate);
             ShowOverlay(TtsPanel);
             StartTtsLabel.Text = "暂停朗读";
-                        TtsStatus.Text = "● 正在朗读";
+            TtsStatus.Text = "● 正在准备语音";
             _tts.Start(_sentences.Select(s => new SpokenSentence(s.text, s.start, s.end)).ToList(), startIdx);
         }
         catch (Exception ex)
@@ -648,6 +649,7 @@ public sealed partial class ReaderPage : Page
         {
             if (idx >= _sentences.Count) return;
             _speakingIdx = idx;
+            if (!_paused) TtsStatus.Text = "● 正在朗读";
             var s = _sentences[idx];
             // 朗读句进入下一页时再翻页，当前页内只更新高亮。
             await RunReader($"window.JTReader.highlightRange({s.start},{s.end});window.JTReader.goToOffset({s.start}, true);");
@@ -693,10 +695,18 @@ public sealed partial class ReaderPage : Page
         });
     }
 
+    private void OnTtsBuffering(int done, int total)
+    {
+        _ = DispatcherQueue.TryEnqueue(() =>
+        {
+            if (_ttsActive && !_paused) TtsStatus.Text = $"● 正在缓冲语音 ({done}/{total} 句)";
+        });
+    }
+
     private bool _paused;
     private void TogglePause()
     {
-        if (_paused) { _tts.Resume(); _paused = false; StartTtsLabel.Text = "暂停朗读"; TtsStatus.Text = "● 正在朗读"; }
+        if (_paused) { _tts.Resume(); _paused = false; StartTtsLabel.Text = "暂停朗读"; TtsStatus.Text = _tts.IsBuffering ? "● 正在缓冲语音…" : "● 正在朗读"; }
         else { _tts.Pause(); _paused = true; StartTtsLabel.Text = "继续朗读"; TtsStatus.Text = "● 已暂停"; }
     }
 
@@ -716,6 +726,7 @@ public sealed partial class ReaderPage : Page
         _tts.SentenceStart -= OnTtsSentence;
         _tts.Finished -= OnTtsFinished;
         _tts.Error -= OnTtsError;
+        _tts.Buffering -= OnTtsBuffering;
         StartTtsLabel.Text = "开始朗读";
         TtsPanel.Visibility = Visibility.Collapsed;
         RefreshDismissLayer();

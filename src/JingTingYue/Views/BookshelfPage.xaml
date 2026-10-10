@@ -13,6 +13,8 @@
                 </StackPanel>
             </StackPanel>
             <StackPanel Grid.Row="1" Margin="16,64,16,0" Spacing="12">
+                <!-- 顶层导航 -->
+                <StackPanel x:Name="TopNavPanel" Spacing="4" Margin="0,0,0,8"/>
                 <TextBlock Text="我的空间" FontSize="11" CharacterSpacing="120" FontWeight="SemiBold" Foreground="{StaticResource MutedInkBrush}" Margin="14,0,0,4"/>
                 <StackPanel x:Name="NavPanel"/>
             </StackPanel>

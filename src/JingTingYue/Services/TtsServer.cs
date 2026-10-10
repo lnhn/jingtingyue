@@ -53,7 +53,11 @@ public static class TtsServer
             // 不继承代理，保证 127.0.0.1 直连
             _proc.StartInfo.EnvironmentVariables["HTTP_PROXY"] = "";
             _proc.StartInfo.EnvironmentVariables["HTTPS_PROXY"] = "";
+            _proc.OutputDataReceived += (_, e) => { if (e.Data != null) TtsService.Log("server: " + e.Data); };
+            _proc.ErrorDataReceived += (_, e) => { if (e.Data != null) TtsService.Log("server: " + e.Data); };
             _proc.Start();
+            _proc.BeginOutputReadLine();
+            _proc.BeginErrorReadLine();
             // 等待模型加载（首次约 10-20 秒）
             for (int i = 0; i < 40; i++)
             {
@@ -61,6 +65,21 @@ public static class TtsServer
                 if (await IsUpAsync()) return;
                 if (_proc.HasExited) return;
             }
+        }
+        catch { }
+    }
+
+    public static void Stop()
+    {
+        try
+        {
+            if (_proc is { HasExited: false })
+            {
+                _proc.Kill(entireProcessTree: true);
+                _proc.WaitForExit(3000);
+            }
+            _proc?.Dispose();
+            _proc = null;
         }
         catch { }
     }

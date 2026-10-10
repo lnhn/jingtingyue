@@ -19,10 +19,11 @@
             </Grid.ColumnDefinitions>
             <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center" Margin="14,0,0,0">
                 <Border Width="20" Height="20" CornerRadius="6" Background="{StaticResource ForestGreenBrush}">
-                    <TextBlock Text="静" Foreground="{StaticResource OnAccentBrush}" FontFamily="KaiTi" FontSize="12"
+                    <FontIcon Glyph="&#xE82D;" FontFamily="Segoe MDL2 Assets" FontSize="11"
+                               Foreground="{StaticResource OnAccentBrush}"
                                HorizontalAlignment="Center" VerticalAlignment="Center" />
                 </Border>
-                <TextBlock Text="静听阅" FontFamily="KaiTi" FontSize="14" FontWeight="SemiBold"
+                <TextBlock Text="静听阅" FontFamily="Microsoft YaHei UI" FontSize="13" FontWeight="SemiBold"
                            Foreground="{StaticResource ForestGreenBrush}" VerticalAlignment="Center" />
             </StackPanel>
             <!-- 右侧系统按钮区（最小化/关闭由系统绘制，留出空间） -->
