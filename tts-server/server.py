@@ -12,6 +12,7 @@ from kokoro_onnx import Kokoro
 from misaki.zh import ZHG2P
 from mixed_phonemes import has_chinese, to_phonemes
 from punctuation_audio import synthesize
+from espeak_paths import configure_espeak
 
 MODEL = "model_uint8.onnx" if os.path.exists("model_uint8.onnx") else "model.onnx"
 VOICES = "voices.npz"
@@ -32,6 +33,7 @@ session_options.inter_op_num_threads = 1
 session = ort.InferenceSession(MODEL, sess_options=session_options,
                                providers=["CPUExecutionProvider"])
 kokoro = Kokoro.from_session(session, VOICES)
+configure_espeak()
 voice_styles = {voice: kokoro.get_voice_style(voice) for voice in ZH_VOICES.values()}
 zh_g2p = ZHG2P()
 _g2p_lock = threading.Lock()

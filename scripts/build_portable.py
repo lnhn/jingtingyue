@@ -10,6 +10,7 @@ import hashlib
 import shutil
 import subprocess
 import zipfile
+import xml.etree.ElementTree as ET
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -37,7 +38,7 @@ def main() -> None:
 
     tts = RUNTIME / "tts-server"
     tts.mkdir(exist_ok=True)
-    for name in ("server.py", "mixed_phonemes.py", "punctuation_audio.py", "model_uint8.onnx", "voices.npz"):
+    for name in ("server.py", "mixed_phonemes.py", "punctuation_audio.py", "espeak_paths.py", "model_uint8.onnx", "voices.npz"):
         shutil.copy2(source(ROOT / "tts-server" / name, ROOT / "publish/tts-server" / name), tts / name)
     shutil.copytree(
         source(ROOT / "tts-server/python", ROOT / "publish/tts-server/python"),
@@ -71,7 +72,8 @@ def main() -> None:
     )
     dist = ROOT / "dist"
     dist.mkdir(exist_ok=True)
-    target = dist / "JingTingYue-v1.2.0-win-x64.exe"
+    version = ET.parse(ROOT / "src/JingTingYue/JingTingYue.csproj").findtext("./PropertyGroup/Version")
+    target = dist / f"JingTingYue-v{version}-win-x64.exe"
     shutil.copy2(launcher_out / "JingTingYue.Portable.exe", target)
     print(f"Created {target} ({target.stat().st_size:,} bytes)")
     with target.open("rb") as stream:
