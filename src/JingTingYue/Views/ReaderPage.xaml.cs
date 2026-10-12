@@ -256,6 +256,7 @@ public sealed partial class ReaderPage : Page
         {
             _currentChapter = Math.Min(_book.LastChapter, _book.Book.Chapters.Count - 1);
             _pendingPageToRestore = _book.LastPage;
+            _ = BookStore.MarkReadAsync(_book.Id);
             BuildTocFromBook();
         }
         else

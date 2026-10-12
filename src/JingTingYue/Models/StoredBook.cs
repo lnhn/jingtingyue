@@ -16,6 +16,7 @@ public class StoredBook
     [JsonPropertyName("lastChapter")] public int LastChapter { get; set; }
     [JsonPropertyName("lastPage")] public int LastPage { get; set; }
     [JsonPropertyName("progress")] public int Progress { get; set; }
+    [JsonPropertyName("lastReadAt")] public DateTimeOffset? LastReadAt { get; set; }
     [JsonPropertyName("category")] public string Category { get; set; } = "";
     // 每本书独立的阅读设置
     [JsonPropertyName("fontFamily")] public string FontFamily { get; set; } = "";

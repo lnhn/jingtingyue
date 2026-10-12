@@ -14,6 +14,7 @@ public static class BookStore
     private static readonly string Root = DataPaths.Root;
     private static readonly string BooksFile = Path.Combine(Root, "books.json");
     private static readonly string EpubDir = Path.Combine(Root, "epubs");
+    private static readonly SemaphoreSlim SaveLock = new(1, 1);
 
     private static readonly string[] Palette = { "#3A4A63", "#2F5D4B", "#9E4F35" };
 
@@ -70,9 +71,14 @@ public static class BookStore
 
     private static async Task SaveAsync()
     {
-        var real = Books.Where(b => !b.Id.StartsWith("sample-")).ToList();
-        var json = JsonSerializer.Serialize(real, new JsonSerializerOptions { WriteIndented = true });
-        await File.WriteAllTextAsync(BooksFile, json);
+        await SaveLock.WaitAsync();
+        try
+        {
+            var real = Books.Where(b => !b.Id.StartsWith("sample-")).ToList();
+            var json = JsonSerializer.Serialize(real, new JsonSerializerOptions { WriteIndented = true });
+            await File.WriteAllTextAsync(BooksFile, json);
+        }
+        finally { SaveLock.Release(); }
     }
 
     public static async Task<StoredBook> AddImportedAsync(string sourceEpubPath, EpubBook parsed)
@@ -116,6 +122,16 @@ public static class BookStore
         b.LastChapter = lastChapter;
         b.LastPage = lastPage;
         b.Progress = progress;
+        b.LastReadAt = DateTimeOffset.UtcNow;
+        return SaveAsync();
+    }
+
+    /// <summary>打开书籍时记录最近阅读，即使没有翻页或进度仍为 0%。</summary>
+    public static Task MarkReadAsync(string id)
+    {
+        var b = Books.FirstOrDefault(x => x.Id == id);
+        if (b == null || b.Id.StartsWith("sample-")) return Task.CompletedTask;
+        b.LastReadAt = DateTimeOffset.UtcNow;
         return SaveAsync();
     }
 
@@ -135,7 +151,11 @@ public static class BookStore
 
     /// <summary>最近在读的真实书（用于“继续阅读”）。</summary>
     public static StoredBook? LastRead =>
-        Books.Where(b => !b.Id.StartsWith("sample-")).OrderByDescending(b => b.Progress).FirstOrDefault();
+        Books.Where(b => !b.Id.StartsWith("sample-") && b.LastReadAt.HasValue)
+             .OrderByDescending(b => b.LastReadAt).FirstOrDefault()
+        // 旧书库没有阅读时间，只保留一个有阅读位置的候选；下次打开书即按时间更新。
+        ?? Books.FirstOrDefault(b => !b.Id.StartsWith("sample-")
+            && (b.Progress > 0 || b.LastChapter > 0 || b.LastPage > 0));
 
     /// <summary>所有已使用的分类名（去重、非空）。</summary>
     public static List<string> Categories =>

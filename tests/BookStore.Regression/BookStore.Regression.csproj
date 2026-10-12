@@ -1,0 +1,14 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="../../src/JingTingYue/Models/StoredBook.cs" Link="StoredBook.cs" />
+    <Compile Include="../../src/JingTingYue/Services/BookStore.cs" Link="BookStore.cs" />
+    <Compile Include="../../src/JingTingYue/Services/DataPaths.cs" Link="DataPaths.cs" />
+    <Compile Include="../../src/JingTingYue/Services/EpubParser.cs" Link="EpubParser.cs" />
+  </ItemGroup>
+</Project>
